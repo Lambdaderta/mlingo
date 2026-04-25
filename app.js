@@ -1440,6 +1440,491 @@ topics.find((topic) => topic.id === "validation").lessons.push(...advancedValida
 topics.find((topic) => topic.id === "numpy-pandas-boosting").lessons.push(...advancedValidationLessons.slice(8, 12));
 topics.find((topic) => topic.id === "metrics-losses").lessons.push(...advancedValidationLessons.slice(12));
 
+const extraLessonPacks = {
+  "cv-masks": [
+    {
+      id: "extra-cv-rle-encode",
+      kind: "write",
+      title: "RLE encode mask",
+      prompt: "Напиши `rle_encode(mask)`: mask - numpy HxW 0/1. Верни строку Kaggle RLE в column-major порядке.",
+      starter: "def rle_encode(mask):",
+      answer:
+        "def rle_encode(mask):\n    pixels = mask.T.flatten().astype(np.uint8)\n    pixels = np.concatenate([[0], pixels, [0]])\n    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1\n    runs[1::2] -= runs[::2]\n    return ' '.join(map(str, runs))",
+      testsText: "Проверяется пустая маска, один объект и порядок Fortran/Kaggle.",
+      hint: "Kaggle segmentation часто ожидает flatten по колонкам, поэтому нужен `mask.T.flatten()`.",
+      explain: "RLE хранит старт и длину подряд идущих foreground-пикселей. Ошибка в порядке flatten полностью ломает submission.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-cv-rle-decode",
+      kind: "write",
+      title: "RLE decode mask",
+      prompt: "Напиши `rle_decode(rle, shape)`, который возвращает numpy mask HxW 0/1 из строки RLE.",
+      starter: "def rle_decode(rle, shape):",
+      answer:
+        "def rle_decode(rle, shape):\n    mask = np.zeros(shape[0] * shape[1], dtype=np.uint8)\n    if not rle:\n        return mask.reshape((shape[1], shape[0])).T\n    values = list(map(int, rle.split()))\n    starts = np.array(values[0::2]) - 1\n    lengths = np.array(values[1::2])\n    for start, length in zip(starts, lengths):\n        mask[start:start + length] = 1\n    return mask.reshape((shape[1], shape[0])).T",
+      testsText: "Проверяется round-trip encode/decode и пустая строка.",
+      hint: "Если encode делал `mask.T.flatten()`, decode должен вернуть обратный reshape.",
+      explain: "RLE decode нужен для локальной валидации, визуализации и ансамблей по submission-файлам.",
+      difficulty: 5,
+    },
+    {
+      id: "extra-cv-pad-to-square",
+      kind: "write",
+      title: "Pad image to square",
+      prompt: "Напиши `pad_to_square(img, fill=0)` для numpy image HxWxC: дополни до квадрата снизу/справа.",
+      starter: "def pad_to_square(img, fill=0):",
+      answer:
+        "def pad_to_square(img, fill=0):\n    h, w = img.shape[:2]\n    size = max(h, w)\n    out = np.full((size, size, *img.shape[2:]), fill, dtype=img.dtype)\n    out[:h, :w] = img\n    return out",
+      testsText: "Проверяется H>W, W>H, grayscale/RGB и сохранение dtype.",
+      hint: "Создай новый квадрат и скопируй оригинал в левый верхний угол.",
+      explain: "Padding до квадрата часто проще, чем искажать aspect ratio при resize.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-cv-crop-bbox-margin",
+      kind: "write",
+      title: "Crop bbox with margin",
+      prompt: "Напиши `crop_bbox(img, bbox, margin)`, где bbox = `[x1,y1,x2,y2]`. Координаты надо обрезать границами изображения.",
+      starter: "def crop_bbox(img, bbox, margin=0):",
+      answer:
+        "def crop_bbox(img, bbox, margin=0):\n    h, w = img.shape[:2]\n    x1, y1, x2, y2 = bbox\n    x1 = max(0, x1 - margin)\n    y1 = max(0, y1 - margin)\n    x2 = min(w - 1, x2 + margin)\n    y2 = min(h - 1, y2 + margin)\n    return img[y1:y2 + 1, x1:x2 + 1]",
+      testsText: "Проверяется bbox у края картинки и inclusive формат x2/y2.",
+      hint: "В numpy crop сначала y, потом x.",
+      explain: "Crop по bbox полезен для second-stage классификации и быстрой визуальной проверки объектов.",
+      difficulty: 4,
+    },
+  ],
+  "cv-segmentation": [
+    {
+      id: "extra-cv-tta-flip-fix",
+      kind: "fix",
+      title: "TTA flip обратно",
+      prompt: "Исправь horizontal flip TTA: предсказание на перевернутом image нужно развернуть обратно перед усреднением.",
+      code:
+        "prob1 = torch.sigmoid(model(x))\nprob2 = torch.sigmoid(model(torch.flip(x, dims=[3])))\nprob = (prob1 + prob2) / 2",
+      answer:
+        "prob1 = torch.sigmoid(model(x))\nprob2 = torch.sigmoid(model(torch.flip(x, dims=[3])))\nprob2 = torch.flip(prob2, dims=[3])\nprob = (prob1 + prob2) / 2",
+      hint: "Flip по width axis нужно отменить на probability map.",
+      explain: "Иначе ты усредняешь маску в разных системах координат, и контуры размываются.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-cv-class-pixel-counts",
+      kind: "write",
+      title: "Pixel class counts",
+      prompt: "Напиши `pixel_class_counts(mask, num_classes)`: вернуть количество пикселей каждого класса в mask HxW.",
+      starter: "def pixel_class_counts(mask, num_classes):",
+      answer:
+        "def pixel_class_counts(mask, num_classes):\n    flat = mask.reshape(-1)\n    return np.bincount(flat, minlength=num_classes)[:num_classes]",
+      testsText: "Проверяется отсутствие некоторых классов и num_classes больше max id.",
+      hint: "`np.bincount` уже считает частоты integer ids.",
+      explain: "Так быстро оценивают class imbalance для segmentation loss/weights.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-cv-multiclass-dice",
+      kind: "write",
+      title: "Multiclass Dice",
+      prompt: "Напиши `multiclass_dice(logits, target, num_classes)`. logits BxCxHxW, target BxHxW.",
+      starter: "def multiclass_dice(logits, target, num_classes, eps=1e-6):",
+      answer:
+        "def multiclass_dice(logits, target, num_classes, eps=1e-6):\n    pred = logits.argmax(dim=1)\n    scores = []\n    for cls in range(num_classes):\n        p = pred == cls\n        t = target == cls\n        inter = (p & t).sum().float()\n        denom = p.sum().float() + t.sum().float()\n        scores.append((2 * inter + eps) / (denom + eps))\n    return torch.stack(scores).mean().item()",
+      testsText: "Проверяется несколько классов, пустой класс и argmax по channel dimension.",
+      hint: "Для метрики можно взять `argmax`, для loss обычно нужны soft probabilities.",
+      explain: "Multiclass Dice дает более честную картину, чем pixel accuracy при большом фоне.",
+      difficulty: 5,
+    },
+    {
+      id: "extra-cv-valid-mean-per-image",
+      kind: "fix",
+      title: "Mean Dice по images",
+      prompt: "Исправь агрегацию Dice: нельзя складывать все пиксели датасета в один общий Dice, если leaderboard считает mean по картинкам.",
+      code:
+        "inter += (pred & target).sum()\nunion += pred.sum() + target.sum()\nscore = (2 * inter + 1e-6) / (union + 1e-6)",
+      answer:
+        "scores.append(dice_score(pred, target))\nscore = np.mean(scores)",
+      hint: "Сначала score каждого image, потом mean.",
+      explain: "Разные задачи усредняют метрику по-разному. Это надо повторять в validation максимально близко к leaderboard.",
+      difficulty: 4,
+    },
+  ],
+  "cv-detection-count": [
+    {
+      id: "extra-count-local-maxima",
+      kind: "write",
+      title: "Local maxima count",
+      prompt: "Напиши подсчет локальных максимумов heatmap через threshold и dilation.",
+      starter: "def count_peaks(heatmap, threshold=0.5):",
+      answer:
+        "def count_peaks(heatmap, threshold=0.5):\n    kernel = np.ones((3, 3), dtype=np.uint8)\n    dilated = cv2.dilate(heatmap, kernel)\n    peaks = (heatmap == dilated) & (heatmap >= threshold)\n    return int(peaks.sum())",
+      testsText: "Проверяется одиночный peak, два peak и threshold.",
+      hint: "Локальный максимум равен dilated value в своей окрестности.",
+      explain: "Для counting heatmaps часто достаточно найти пики, если модель выдает центр объектов.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-bbox-nms-write",
+      kind: "write",
+      title: "NMS руками",
+      prompt: "Напиши скелет NMS: сортировка по score, берем лучший bbox, удаляем bbox с IoU выше threshold.",
+      starter: "def nms(boxes, scores, iou_thr=0.5):",
+      answer:
+        "def nms(boxes, scores, iou_thr=0.5):\n    order = np.argsort(scores)[::-1]\n    keep = []\n    while len(order) > 0:\n        i = order[0]\n        keep.append(i)\n        rest = order[1:]\n        rest = np.array([j for j in rest if bbox_iou(boxes[i], boxes[j]) <= iou_thr])\n        order = rest\n    return keep",
+      testsText: "Проверяется подавление пересекающихся bbox и сохранение далеких bbox.",
+      hint: "Каждый шаг фиксирует самый уверенный bbox.",
+      explain: "NMS часто дает быстрый прирост в detection/counting задачах с дубликатами.",
+      difficulty: 5,
+    },
+    {
+      id: "extra-count-mae-from-density",
+      kind: "fix",
+      title: "MAE по count, не по pixels",
+      prompt: "Исправь validation для density counting: leaderboard оценивает ошибку количества объектов, не попиксельную MSE.",
+      code:
+        "pred = model(x)\nloss = F.mse_loss(pred, density)\nmetric += loss.item()",
+      answer:
+        "pred = model(x)\npred_count = pred.sum(dim=(1, 2, 3))\ntrue_count = density.sum(dim=(1, 2, 3))\nmetric += torch.abs(pred_count - true_count).sum().item()",
+      hint: "Сумма density map - это count.",
+      explain: "Оптимизировать loss можно по density, но validation metric должна повторять leaderboard.",
+      difficulty: 4,
+    },
+  ],
+  "torch-loops": [
+    {
+      id: "extra-torch-amp-step",
+      kind: "order",
+      title: "AMP train step",
+      prompt: "Собери mixed precision training step с GradScaler.",
+      blocks: [
+        "optimizer.zero_grad()",
+        "with torch.cuda.amp.autocast():",
+        "    logits = model(x)",
+        "    loss = criterion(logits, y)",
+        "scaler.scale(loss).backward()",
+        "scaler.step(optimizer)",
+        "scaler.update()",
+      ],
+      answer: [
+        "optimizer.zero_grad()",
+        "with torch.cuda.amp.autocast():",
+        "    logits = model(x)",
+        "    loss = criterion(logits, y)",
+        "scaler.scale(loss).backward()",
+        "scaler.step(optimizer)",
+        "scaler.update()",
+      ],
+      hint: "Backward и step идут через scaler.",
+      explain: "AMP ускоряет обучение на GPU и экономит память, но порядок действий важен.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-torch-grad-accum-fix",
+      kind: "fix",
+      title: "Gradient accumulation",
+      prompt: "Исправь gradient accumulation на 4 шага: loss надо делить, optimizer.step делать раз в 4 minibatch.",
+      code:
+        "for i, (x, y) in enumerate(loader):\n    loss = criterion(model(x), y)\n    loss.backward()\n    optimizer.step()\n    optimizer.zero_grad()",
+      answer:
+        "optimizer.zero_grad()\nfor i, (x, y) in enumerate(loader):\n    loss = criterion(model(x), y) / 4\n    loss.backward()\n    if (i + 1) % 4 == 0:\n        optimizer.step()\n        optimizer.zero_grad()",
+      hint: "Accumulation имитирует больший batch.",
+      explain: "Если не делить loss, effective gradient станет в 4 раза больше.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-torch-seed-all",
+      kind: "write",
+      title: "seed_everything",
+      prompt: "Напиши `seed_everything(seed)`, чтобы зафиксировать random, numpy и torch.",
+      starter: "def seed_everything(seed=42):",
+      answer:
+        "def seed_everything(seed=42):\n    random.seed(seed)\n    np.random.seed(seed)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed_all(seed)\n    torch.backends.cudnn.deterministic = True\n    torch.backends.cudnn.benchmark = False",
+      testsText: "Проверяется наличие random, numpy, torch и cudnn flags.",
+      hint: "Один seed в одном месте лучше, чем scattered magic numbers.",
+      explain: "Полной детерминированности на GPU не всегда будет, но это снижает шум экспериментов.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-torch-freeze-backbone",
+      kind: "fix",
+      title: "Freeze backbone",
+      prompt: "Исправь заморозку backbone: сейчас параметры не замораживаются.",
+      code:
+        "for p in model.backbone.parameters():\n    p.requires_grad == False\noptimizer = torch.optim.Adam(model.parameters(), lr=1e-3)",
+      answer:
+        "for p in model.backbone.parameters():\n    p.requires_grad = False\noptimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-3)",
+      hint: "`==` сравнивает, `=` присваивает.",
+      explain: "Даже когда pretrained нельзя, freeze/unfreeze полезен для своих staged experiments.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-torch-save-best",
+      kind: "write",
+      title: "Save best model",
+      prompt: "Напиши логику сохранения лучшей модели по validation score.",
+      starter: "best_score = -1\n# inside epoch loop",
+      answer:
+        "best_score = -1\n# inside epoch loop\nif val_score > best_score:\n    best_score = val_score\n    torch.save(model.state_dict(), 'best.pt')",
+      testsText: "Проверяется обновление best_score только при улучшении.",
+      hint: "Сохраняй checkpoint по validation, а не по train loss.",
+      explain: "На 6-часовом контесте best checkpoint защищает от последнего переобученного эпохами запуска.",
+      difficulty: 2,
+    },
+  ],
+  "dataset-loader": [
+    {
+      id: "extra-detection-collate",
+      kind: "write",
+      title: "Detection collate_fn",
+      prompt: "Напиши `collate_fn` для detection dataset, где каждое изображение имеет разное число bbox.",
+      starter: "def collate_fn(batch):",
+      answer:
+        "def collate_fn(batch):\n    images, targets = zip(*batch)\n    images = torch.stack(images)\n    return images, list(targets)",
+      testsText: "Проверяется, что targets не пытаются stack при разном числе bbox.",
+      hint: "Images одинакового размера можно stack, targets лучше оставить списком.",
+      explain: "Стандартный DataLoader collate ломается, когда bbox count разный.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-worker-init-seed",
+      kind: "write",
+      title: "worker_init_fn seed",
+      prompt: "Напиши `seed_worker(worker_id)`, чтобы numpy/random в DataLoader workers были стабильнее.",
+      starter: "def seed_worker(worker_id):",
+      answer:
+        "def seed_worker(worker_id):\n    worker_seed = torch.initial_seed() % 2**32\n    np.random.seed(worker_seed)\n    random.seed(worker_seed)",
+      testsText: "Проверяется использование torch.initial_seed и seed для numpy/random.",
+      hint: "Каждый worker получает свой seed от PyTorch.",
+      explain: "Это полезно для воспроизводимых аугментаций в DataLoader.",
+      difficulty: 3,
+    },
+  ],
+  validation: [
+    {
+      id: "extra-stratified-kfold-oof",
+      kind: "write",
+      title: "Stratified OOF loop",
+      prompt: "Напиши 5-fold OOF loop для binary classification со StratifiedKFold и ROC-AUC по фолдам.",
+      starter: "oof = np.zeros(len(X))\nscores = []\n# loop",
+      answer:
+        "from sklearn.model_selection import StratifiedKFold\nfrom sklearn.metrics import roc_auc_score\n\noof = np.zeros(len(X))\nscores = []\nskf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\nfor tr_idx, val_idx in skf.split(X, y):\n    model = make_model()\n    model.fit(X.iloc[tr_idx], y.iloc[tr_idx])\n    oof[val_idx] = model.predict_proba(X.iloc[val_idx])[:, 1]\n    scores.append(roc_auc_score(y.iloc[val_idx], oof[val_idx]))\nprint(np.mean(scores), roc_auc_score(y, oof))",
+      testsText: "Проверяется stratified split, fresh model и заполнение oof только на val_idx.",
+      hint: "OOF должен покрыть каждую train-строку ровно один раз.",
+      explain: "OOF loop - основной каркас честной валидации и stacking.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-per-fold-preprocess",
+      kind: "fix",
+      title: "Preprocess внутри fold",
+      prompt: "Исправь leakage: imputer и scaler обучаются до KFold на всем train.",
+      code:
+        "X_imp = imputer.fit_transform(X)\nX_scaled = scaler.fit_transform(X_imp)\nfor tr_idx, val_idx in cv.split(X_scaled, y):\n    model.fit(X_scaled[tr_idx], y.iloc[tr_idx])\n    pred = model.predict_proba(X_scaled[val_idx])[:, 1]",
+      answer:
+        "for tr_idx, val_idx in cv.split(X, y):\n    X_tr = imputer.fit_transform(X.iloc[tr_idx])\n    X_val = imputer.transform(X.iloc[val_idx])\n    X_tr = scaler.fit_transform(X_tr)\n    X_val = scaler.transform(X_val)\n    model.fit(X_tr, y.iloc[tr_idx])\n    pred = model.predict_proba(X_val)[:, 1]",
+      hint: "Любой fit делается только на train fold.",
+      explain: "В KFold preprocessing тоже должен быть fold-aware, иначе validation видит статистики val fold.",
+      difficulty: 5,
+    },
+    {
+      id: "extra-submit-budget",
+      kind: "choice",
+      title: "20 сабмитов",
+      prompt: "Ты получил +0.02 на validation после threshold sweep. Что сделать первым?",
+      options: ["Сделать submit и зафиксировать улучшение", "Сразу переписать архитектуру", "Удалить validation", "Подобрать threshold на test"],
+      answer: "Сделать submit и зафиксировать улучшение",
+      hint: "У тренера был прямой совет: получил лучше baseline - отправь.",
+      explain: "Сабмиты ограничены, но ранний хороший submit снижает риск остаться с поломанным финальным решением.",
+      difficulty: 1,
+    },
+  ],
+  "numpy-pandas-boosting": [
+    {
+      id: "extra-rare-category-collapse",
+      kind: "write",
+      title: "Rare category collapse",
+      prompt: "Замени редкие категории в `city`, которые встречаются в train меньше 10 раз, на `'__rare__'` в train и test.",
+      starter: "col = 'city'\n# modify train and test",
+      answer:
+        "col = 'city'\ncounts = train[col].value_counts()\nrare = counts[counts < 10].index\ntrain[col] = train[col].where(~train[col].isin(rare), '__rare__')\ntest[col] = test[col].where(~test[col].isin(rare), '__rare__')",
+      testsText: "Проверяется, что rare список построен только по train.",
+      hint: "Редкость считаем на train, потом применяем тот же список к test.",
+      explain: "Схлопывание редких категорий снижает шум в one-hot/target encoding.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-train-quantile-clip",
+      kind: "write",
+      title: "Train quantile clipping",
+      prompt: "Обрежь `amount` по 1% и 99% quantile, посчитанным только на train. Примени к train и test.",
+      starter: "col = 'amount'\n# clip train and test",
+      answer:
+        "col = 'amount'\nlo, hi = train[col].quantile([0.01, 0.99])\ntrain[col] = train[col].clip(lo, hi)\ntest[col] = test[col].clip(lo, hi)",
+      testsText: "Проверяется, что quantiles не считаются на test.",
+      hint: "Даже unsupervised статистики лучше брать из train.",
+      explain: "Clipping выбросов часто стабилизирует линейные модели и neural nets.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-lgbm-class-weight",
+      kind: "fix",
+      title: "Imbalanced LightGBM",
+      prompt: "Исправь baseline для сильного дисбаланса классов: добавь вес positive класса.",
+      code:
+        "model = LGBMClassifier(n_estimators=1000, random_state=42)\nmodel.fit(X_train, y_train)",
+      answer:
+        "pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)\nmodel = LGBMClassifier(n_estimators=1000, scale_pos_weight=pos_weight, random_state=42)\nmodel.fit(X_train, y_train)",
+      hint: "`scale_pos_weight` примерно equal negative / positive.",
+      explain: "При сильном дисбалансе модель может слишком любить majority class.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-pandas-safe-merge",
+      kind: "fix",
+      title: "Merge без дубликатов",
+      prompt: "Исправь feature merge: справочник `merchant_stats` может иметь несколько строк на merchant_id.",
+      code:
+        "train = train.merge(merchant_stats, on='merchant_id', how='left')\ntest = test.merge(merchant_stats, on='merchant_id', how='left')",
+      answer:
+        "merchant_stats = merchant_stats.drop_duplicates('merchant_id')\ntrain = train.merge(merchant_stats, on='merchant_id', how='left', validate='m:1')\ntest = test.merge(merchant_stats, on='merchant_id', how='left', validate='m:1')",
+      hint: "`validate='m:1'` заставит pandas упасть, если merge размножает строки.",
+      explain: "Незаметное размножение строк после merge может испортить и train, и submission.",
+      difficulty: 4,
+    },
+  ],
+  "metrics-losses": [
+    {
+      id: "extra-balanced-accuracy",
+      kind: "write",
+      title: "Balanced accuracy",
+      prompt: "Напиши balanced accuracy для binary classification через recall по каждому классу.",
+      starter: "def balanced_accuracy(y_true, y_pred):",
+      answer:
+        "def balanced_accuracy(y_true, y_pred):\n    y_true = np.asarray(y_true)\n    y_pred = np.asarray(y_pred)\n    recall0 = ((y_true == 0) & (y_pred == 0)).sum() / max((y_true == 0).sum(), 1)\n    recall1 = ((y_true == 1) & (y_pred == 1)).sum() / max((y_true == 1).sum(), 1)\n    return 0.5 * (recall0 + recall1)",
+      testsText: "Проверяется дисбаланс классов и отсутствие деления на ноль.",
+      hint: "Balanced accuracy - средний recall по классам.",
+      explain: "Она полезнее accuracy, когда один класс встречается намного чаще.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-macro-f1-choice",
+      kind: "choice",
+      title: "Macro F1",
+      prompt: "Что делает macro F1 в multiclass classification?",
+      options: ["Считает F1 каждого класса и усредняет поровну", "Считает accuracy", "Усредняет loss по batch", "Игнорирует редкие классы"],
+      answer: "Считает F1 каждого класса и усредняет поровну",
+      hint: "Macro значит, что классы равноправны.",
+      explain: "Macro F1 заставляет обращать внимание на редкие классы, потому что каждый класс дает одинаковый вес.",
+      difficulty: 2,
+    },
+    {
+      id: "extra-logloss-clipping",
+      kind: "fix",
+      title: "Logloss clipping",
+      prompt: "Исправь binary logloss: сейчас `log(0)` может дать inf.",
+      code:
+        "def logloss(y, p):\n    return -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p))",
+      answer:
+        "def logloss(y, p, eps=1e-15):\n    p = np.clip(p, eps, 1 - eps)\n    return -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p))",
+      hint: "Вероятности надо обрезать в `(eps, 1-eps)`.",
+      explain: "Один нулевой probability на правильном классе может сделать logloss бесконечным.",
+      difficulty: 3,
+    },
+  ],
+  architectures: [
+    {
+      id: "extra-attention-mask-fix",
+      kind: "fix",
+      title: "Attention mask до softmax",
+      prompt: "Исправь attention: padding mask надо применять к scores до softmax.",
+      code:
+        "scores = Q @ K.transpose(-2, -1) / math.sqrt(d)\nweights = scores.softmax(dim=-1)\nweights = weights.masked_fill(mask == 0, 0)\nout = weights @ V",
+      answer:
+        "scores = Q @ K.transpose(-2, -1) / math.sqrt(d)\nscores = scores.masked_fill(mask == 0, -1e9)\nweights = scores.softmax(dim=-1)\nout = weights @ V",
+      hint: "Softmax должен не дать probability запрещенным позициям.",
+      explain: "Если занулить weights после softmax, сумма вероятностей уже не нормирована.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-recsys-bpr-loss",
+      kind: "write",
+      title: "BPR loss",
+      prompt: "Напиши BPR loss для recsys: positive scores должны быть выше negative scores.",
+      starter: "def bpr_loss(pos_score, neg_score):",
+      answer:
+        "def bpr_loss(pos_score, neg_score):\n    return -torch.log(torch.sigmoid(pos_score - neg_score) + 1e-8).mean()",
+      testsText: "Проверяется, что loss меньше, когда pos_score намного больше neg_score.",
+      hint: "Оптимизируем разницу pos - neg.",
+      explain: "BPR - простой pairwise loss для implicit feedback recommender systems.",
+      difficulty: 4,
+    },
+    {
+      id: "extra-negative-sampling",
+      kind: "write",
+      title: "Negative sampling",
+      prompt: "Напиши `sample_negative(pos_items, num_items)`: выбрать item id, которого нет в set pos_items.",
+      starter: "def sample_negative(pos_items, num_items):",
+      answer:
+        "def sample_negative(pos_items, num_items):\n    pos_items = set(pos_items)\n    item = random.randrange(num_items)\n    while item in pos_items:\n        item = random.randrange(num_items)\n    return item",
+      testsText: "Проверяется, что возвращенный item не positive.",
+      hint: "Для простого baseline достаточно rejection sampling.",
+      explain: "Implicit recsys почти всегда требует negative samples, потому что явных negative нет.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-rl-epsilon-greedy",
+      kind: "write",
+      title: "Epsilon-greedy action",
+      prompt: "Напиши выбор action: с вероятностью epsilon random, иначе argmax Q.",
+      starter: "def choose_action(q_values, epsilon):",
+      answer:
+        "def choose_action(q_values, epsilon):\n    if random.random() < epsilon:\n        return random.randrange(len(q_values))\n    return int(np.argmax(q_values))",
+      testsText: "Проверяется epsilon=0 и корректный диапазон random action.",
+      hint: "Exploration против exploitation.",
+      explain: "Это базовый механизм исследования в Q-learning.",
+      difficulty: 3,
+    },
+    {
+      id: "extra-diffusion-linear-beta",
+      kind: "write",
+      title: "Linear beta schedule",
+      prompt: "Напиши `linear_beta_schedule(timesteps, beta_start, beta_end)` через torch.linspace.",
+      starter: "def linear_beta_schedule(timesteps, beta_start=1e-4, beta_end=0.02):",
+      answer:
+        "def linear_beta_schedule(timesteps, beta_start=1e-4, beta_end=0.02):\n    return torch.linspace(beta_start, beta_end, timesteps)",
+      testsText: "Проверяется длина schedule и первый/последний beta.",
+      hint: "В простом DDPM beta растет линейно.",
+      explain: "Schedule задает, сколько шума добавляется на каждом diffusion step.",
+      difficulty: 2,
+    },
+    {
+      id: "extra-diffusion-q-sample",
+      kind: "order",
+      title: "q_sample",
+      prompt: "Собери forward diffusion: получить noisy x_t из x0, noise и alpha_bar_t.",
+      blocks: [
+        "noise = torch.randn_like(x0)",
+        "sqrt_ab = alpha_bar_t.sqrt().view(-1, 1, 1, 1)",
+        "sqrt_omab = (1 - alpha_bar_t).sqrt().view(-1, 1, 1, 1)",
+        "xt = sqrt_ab * x0 + sqrt_omab * noise",
+      ],
+      answer: [
+        "noise = torch.randn_like(x0)",
+        "sqrt_ab = alpha_bar_t.sqrt().view(-1, 1, 1, 1)",
+        "sqrt_omab = (1 - alpha_bar_t).sqrt().view(-1, 1, 1, 1)",
+        "xt = sqrt_ab * x0 + sqrt_omab * noise",
+      ],
+      hint: "alpha_bar_t надо broadcast по C,H,W.",
+      explain: "Это основная формула добавления шума в DDPM.",
+      difficulty: 4,
+    },
+  ],
+};
+
+for (const [topicId, lessons] of Object.entries(extraLessonPacks)) {
+  topics.find((topic) => topic.id === topicId).lessons.push(...lessons);
+}
+
 const practiceSets = [
   { title: "Cuties Mini", copy: "image+mask Dataset, nearest resize, IoU, threshold sweep." },
   { title: "Radar Shapes", copy: "Проверить входные каналы, logits и target для segmentation." },
