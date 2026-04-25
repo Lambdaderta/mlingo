@@ -43,7 +43,8 @@ docker compose up --build
 
 - Проверяет один конкретный навык.
 - Имеет контестный смысл: shape, dtype, leakage, validation, postprocess, loss, metric.
-- Не требует pretrained models и интернета.
+- Использует только библиотеки из [docs/allowed-libraries.md](docs/allowed-libraries.md).
+- Не требует pretrained models, интернета или скачивания весов.
 - Укладывается в короткий игровой блок.
 - Сложность растет от 1 до 5: сначала распознавание, потом правка, потом ручное написание.
 
@@ -59,4 +60,5 @@ docker compose up --build
 node --check app.js
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
 docker compose config
+python3 scripts/audit_lessons.py
 ```

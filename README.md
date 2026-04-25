@@ -71,6 +71,8 @@ python3 server.py --port 4180
 - `manifest.webmanifest` — PWA-настройки для установки на телефон.
 - `service-worker.js` — offline/cache для PWA.
 - `CONTRIBUTING.md` — как добавлять упражнения.
+- `docs/allowed-libraries.md` — список библиотек, под которые можно писать задачи.
+- `scripts/audit_lessons.py` — быстрый аудит задач на запрещенные imports/packages.
 - `LICENSE` — source-available license.
 
 ## Обучающий формат
@@ -114,4 +116,5 @@ python3 server.py --port 4180
 node --check app.js
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
 docker compose config
+python3 scripts/audit_lessons.py
 ```
