@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MLingo icon">
+  <rect width="512" height="512" rx="104" fill="#1e1e1e"/>
+  <rect x="40" y="40" width="432" height="432" rx="82" fill="#242424" stroke="#3a3a3a" stroke-width="10"/>
+  <path d="M104 332V160h54l57 91 57-91h54v172h-48V233l-47 73h-33l-47-73v99h-47Z" fill="#f3f3f3"/>
+  <path d="M352 332V160h48v130h76v42H352Z" fill="#d4d4d4"/>
+  <rect x="104" y="374" width="304" height="18" rx="9" fill="#3a3a3a"/>
+  <rect x="104" y="374" width="148" height="18" rx="9" fill="#f3f3f3"/>
+</svg>

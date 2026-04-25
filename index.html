@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1e1e1e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MLingo" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>MLingo Антивайб</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
+    <script defer src="./app.js?v=9"></script>
+  </head>
+  <body data-layout="course">
+    <div class="app-shell" id="top">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Домой">
+          <span class="brand-mark">ML</span>
+          <span>
+            <strong>MLingo</strong>
+            <small>антивайб-кодинг</small>
+          </span>
+        </a>
+        <div class="top-actions">
+          <button class="ghost-button" id="layoutModeButton" type="button">Макет: курс</button>
+          <button class="ghost-button" id="focusModeButton" type="button">Режим фокуса</button>
+          <button class="ghost-button" id="accountButton" type="button">Войти</button>
+          <button class="primary-button" id="dailyButton" type="button">Сегодня</button>
+        </div>
+      </header>
+
+      <main class="workspace app-layout">
+        <aside class="skill-rail app-sidebar" aria-label="Навигация">
+          <section class="profile-mini">
+            <div class="avatar">Б</div>
+            <div>
+              <strong>Ручная практика</strong>
+              <small>NEOAI / IOAI prep</small>
+            </div>
+          </section>
+
+          <nav class="side-nav" aria-label="Разделы">
+            <button class="nav-button is-active" data-screen="roadmap" type="button">Карта</button>
+            <button class="nav-button" data-screen="lesson" type="button">Урок</button>
+            <button class="nav-button" data-screen="profile" type="button">Профиль</button>
+            <button class="nav-button" data-screen="library" type="button">Шпаргалки</button>
+          </nav>
+
+          <div class="rail-header">
+            <span class="eyebrow">Темы</span>
+            <strong id="railProgress">0 / 0</strong>
+          </div>
+          <div class="track-filter" role="group" aria-label="Фильтр тем">
+            <button class="filter-chip is-active" data-filter="all" type="button">Все</button>
+            <button class="filter-chip" data-filter="cv" type="button">CV</button>
+            <button class="filter-chip" data-filter="torch" type="button">Torch</button>
+            <button class="filter-chip" data-filter="contest" type="button">Contest</button>
+            <button class="filter-chip" data-filter="data" type="button">Data</button>
+          </div>
+          <div class="module-list" id="moduleList"></div>
+        </aside>
+
+        <section class="screen-stack">
+          <section class="app-screen is-active" id="screen-roadmap">
+            <div class="mission-strip roadmap-hero">
+              <div>
+                <span class="eyebrow" id="missionEyebrow">Сегодня</span>
+                <h1 id="missionTitle">Короткие ML-дриллы без автопилота</h1>
+                <p>Выбирай тему, проходи узлы дорожной карты и закрепляй рефлексы: shapes, masks, validation, loss, PyTorch loop.</p>
+              </div>
+              <div class="stat-grid">
+                <div class="stat-pill">
+                  <span>Опыт</span>
+                  <strong id="xpValue">0</strong>
+                </div>
+                <div class="stat-pill">
+                  <span>Стрик</span>
+                  <strong id="fireValue">0</strong>
+                </div>
+                <div class="stat-pill">
+                  <span>Мастерство</span>
+                  <strong id="masteryValue">0%</strong>
+                </div>
+              </div>
+            </div>
+
+            <article class="lesson-card topic-card">
+              <div class="lesson-meta">
+                <div>
+                  <span class="eyebrow">Дорожная карта</span>
+                  <h2 id="roadmapTitle">NumPy Shapes</h2>
+                </div>
+                <span class="lesson-type" id="roadmapBadge">0 / 0</span>
+              </div>
+              <p class="prompt" id="roadmapCopy"></p>
+              <div class="roadmap-path" id="roadmapPath"></div>
+            </article>
+
+            <section class="review-panel">
+              <div>
+                <span class="eyebrow">Практика</span>
+                <h3>20-минутные контест-повторы</h3>
+              </div>
+              <div class="boss-grid" id="bossGrid"></div>
+            </section>
+          </section>
+
+          <section class="app-screen" id="screen-lesson">
+            <article class="lesson-card">
+              <div class="lesson-meta">
+                <div>
+                  <span class="eyebrow" id="lessonTrack">Тема</span>
+                  <h2 id="lessonTitle">Урок</h2>
+                </div>
+                <span class="lesson-type" id="lessonType">Блоки</span>
+              </div>
+
+              <p class="prompt" id="lessonPrompt"></p>
+              <div class="term-strip" id="lessonTerms"></div>
+              <div class="challenge" id="challengeHost"></div>
+
+              <div class="lesson-controls">
+                <button class="ghost-button" id="hintButton" type="button">Подсказка</button>
+                <button class="ghost-button" id="resetButton" type="button">Сброс</button>
+                <button class="primary-button" id="checkButton" type="button">Проверить</button>
+                <button class="primary-button next-button" id="nextButton" type="button">Дальше</button>
+              </div>
+              <div class="feedback" id="feedbackBox" hidden></div>
+            </article>
+          </section>
+
+          <section class="app-screen" id="screen-profile">
+            <article class="lesson-card profile-screen">
+              <div class="profile-head">
+                <div class="avatar big">Б</div>
+                <div>
+                  <span class="eyebrow">Профиль</span>
+                  <h2>Неделя ручного ML-кода</h2>
+                  <p>Цель: чтобы `Dataset`, `training loop`, `IoU`, `target encoding` и `CatBoost baseline` писались без внутреннего сопротивления.</p>
+                </div>
+              </div>
+              <div class="profile-grid">
+                <div class="profile-stat"><span>Опыт</span><strong id="profileXp">0</strong></div>
+                <div class="profile-stat"><span>Стрик</span><strong id="profileStreak">0</strong></div>
+                <div class="profile-stat"><span>Пройдено</span><strong id="profileDone">0</strong></div>
+                <div class="profile-stat"><span>Ошибки</span><strong id="profileMisses">0</strong></div>
+              </div>
+              <section class="leaderboard-panel">
+                <div class="lesson-meta">
+                  <div>
+                    <span class="eyebrow">Лидерборд</span>
+                    <h3>Общий прогресс</h3>
+                  </div>
+                </div>
+                <div class="leaderboard-list" id="leaderboardList"></div>
+              </section>
+            </article>
+          </section>
+
+          <section class="app-screen" id="screen-library">
+            <article class="lesson-card">
+              <div class="lesson-meta">
+                <div>
+                  <span class="eyebrow">Шпаргалки</span>
+                  <h2>Что держать в голове на контесте</h2>
+                </div>
+              </div>
+              <div class="library-grid" id="libraryGrid"></div>
+            </article>
+          </section>
+        </section>
+
+        <aside class="progress-sidebar">
+          <section class="side-card">
+            <span class="eyebrow">Текущая тема</span>
+            <h3 id="sideTrackName">NumPy Shapes</h3>
+            <p id="sideTrackCopy"></p>
+            <div class="progress-bar" aria-label="Прогресс темы">
+              <span id="moduleProgressBar"></span>
+            </div>
+            <small id="moduleProgressText"></small>
+          </section>
+
+          <section class="side-card daily-card">
+            <span class="eyebrow">План на сегодня</span>
+            <div id="dailyQuests"></div>
+          </section>
+
+          <section class="side-card queue-card">
+            <span class="eyebrow">Очередь</span>
+            <div id="queueList"></div>
+          </section>
+
+          <section class="side-card">
+            <span class="eyebrow">Слабые места</span>
+            <div class="weak-list" id="weakList"></div>
+          </section>
+
+          <section class="side-card">
+            <span class="eyebrow">Опорные правила</span>
+            <div class="reference-list" id="referenceList"></div>
+          </section>
+        </aside>
+      </main>
+
+      <nav class="mobile-tabs" aria-label="Мобильная навигация">
+        <button class="mobile-tab is-active" data-screen="roadmap" type="button">Карта</button>
+        <button class="mobile-tab" data-screen="lesson" type="button">Урок</button>
+        <button class="mobile-tab" data-screen="profile" type="button">Профиль</button>
+        <button class="mobile-tab" data-screen="library" type="button">База</button>
+      </nav>
+
+      <div class="auth-modal" id="authModal" hidden>
+        <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+          <div class="lesson-meta">
+            <div>
+              <span class="eyebrow">Аккаунт</span>
+              <h2 id="authTitle">Синхронизация прогресса</h2>
+            </div>
+            <button class="ghost-button icon-button" id="authCloseButton" type="button" aria-label="Закрыть">×</button>
+          </div>
+          <p class="prompt">Аккаунт нужен для прогресса в базе, стриков между устройствами и таблицы лидеров.</p>
+          <div class="auth-form">
+            <label>
+              <span>Логин</span>
+              <input id="authUsername" autocomplete="username" placeholder="например: lambda" />
+            </label>
+            <label>
+              <span>Пароль</span>
+              <input id="authPassword" type="password" autocomplete="current-password" placeholder="минимум 6 символов" />
+            </label>
+          </div>
+          <div class="lesson-controls auth-actions">
+            <button class="ghost-button" id="loginButton" type="button">Войти</button>
+            <button class="primary-button" id="registerButton" type="button">Создать аккаунт</button>
+            <button class="ghost-button" id="logoutButton" type="button">Выйти</button>
+          </div>
+          <div class="feedback auth-feedback" id="authStatus" hidden></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

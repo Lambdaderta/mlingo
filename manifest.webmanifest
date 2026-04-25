@@ -1,0 +1,38 @@
+{
+  "name": "MLingo Антивайб-кодинг",
+  "short_name": "MLingo",
+  "description": "Короткие ML-дриллы по NumPy, Pandas, PyTorch, CV, валидации, метрикам и contest workflow.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#1e1e1e",
+  "theme_color": "#1e1e1e",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Урок",
+      "short_name": "Урок",
+      "description": "Открыть текущий ML-дрилл",
+      "url": "./?screen=lesson",
+      "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Карта",
+      "short_name": "Карта",
+      "description": "Открыть дорожную карту",
+      "url": "./?screen=roadmap",
+      "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
