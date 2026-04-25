@@ -1,0 +1,8 @@
+.git
+__pycache__/
+*.pyc
+.DS_Store
+mlingo.db
+mlingo.db-shm
+mlingo.db-wal
+postgres_data/

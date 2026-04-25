@@ -3,3 +3,4 @@ mlingo.db-shm
 mlingo.db-wal
 __pycache__/
 .DS_Store
+.env

@@ -7,7 +7,6 @@ import http.cookies
 import json
 import os
 import secrets
-import sqlite3
 import time
 from datetime import date, timedelta
 from http import HTTPStatus
@@ -15,8 +14,13 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
+
 ROOT = Path(__file__).resolve().parent
-DB_PATH = Path(os.environ.get("MLINGO_DB", ROOT / "mlingo.db"))
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://mlingo:mlingo@localhost:5432/mlingo")
+ALLOWED_ORIGIN = os.environ.get("MLINGO_ALLOWED_ORIGIN", "")
 SESSION_TTL = 60 * 60 * 24 * 30
 PBKDF2_ITERATIONS = 220_000
 
@@ -25,20 +29,23 @@ def now_ts():
     return int(time.time())
 
 
-def today_key():
-    return date.today().isoformat()
+def json_dumps(data):
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def db_connect():
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as db:
-        db.execute("pragma journal_mode = wal")
+    with db_connect() as db:
         db.execute(
             """
             create table if not exists users (
-              id integer primary key autoincrement,
+              id bigserial primary key,
               username text not null unique,
               password_hash text not null,
-              created_at integer not null
+              created_at bigint not null
             )
             """
         )
@@ -46,47 +53,41 @@ def init_db():
             """
             create table if not exists sessions (
               token text primary key,
-              user_id integer not null references users(id) on delete cascade,
-              created_at integer not null,
-              expires_at integer not null
+              user_id bigint not null references users(id) on delete cascade,
+              created_at bigint not null,
+              expires_at bigint not null
             )
             """
         )
         db.execute(
             """
             create table if not exists progress (
-              user_id integer primary key references users(id) on delete cascade,
-              state_json text not null,
+              user_id bigint primary key references users(id) on delete cascade,
+              state_json jsonb not null,
               xp integer not null default 0,
               streak integer not null default 0,
               completed_count integer not null default 0,
               miss_count integer not null default 0,
-              updated_at integer not null
+              updated_at bigint not null
             )
             """
         )
         db.execute(
             """
             create table if not exists events (
-              id integer primary key autoincrement,
-              user_id integer not null references users(id) on delete cascade,
+              id bigserial primary key,
+              user_id bigint not null references users(id) on delete cascade,
               lesson_id text not null,
-              correct integer not null,
+              correct boolean not null,
               xp_delta integer not null default 0,
-              created_at integer not null
+              created_at bigint not null
             )
             """
         )
-
-
-def db_connect():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def json_dumps(data):
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        db.execute("create index if not exists sessions_user_id_idx on sessions(user_id)")
+        db.execute("create index if not exists sessions_expires_at_idx on sessions(expires_at)")
+        db.execute("create index if not exists events_user_created_idx on events(user_id, created_at desc)")
+        db.execute("create index if not exists progress_leaderboard_idx on progress(xp desc, streak desc, completed_count desc, updated_at asc)")
 
 
 def read_json(handler):
@@ -124,6 +125,10 @@ def verify_password(password, stored):
         return False
 
 
+def empty_progress_state():
+    return {"xp": 0, "streak": 0, "completed": {}, "completedDates": {}, "misses": {}, "layoutMode": "course"}
+
+
 def state_stats(state):
     completed = state.get("completed") or {}
     misses = state.get("misses") or {}
@@ -154,18 +159,26 @@ def public_user(row):
     }
 
 
+def parse_state_json(value):
+    if isinstance(value, str):
+        return json.loads(value)
+    if isinstance(value, dict):
+        return value
+    return empty_progress_state()
+
+
 def get_progress(db, user_id):
-    row = db.execute("select * from progress where user_id = ?", (user_id,)).fetchone()
+    row = db.execute("select * from progress where user_id = %s", (user_id,)).fetchone()
     if not row:
         return {
-            "state": {"xp": 0, "streak": 0, "completed": {}, "completedDates": {}, "misses": {}, "layoutMode": "course"},
+            "state": empty_progress_state(),
             "xp": 0,
             "streak": 0,
             "completedCount": 0,
             "missCount": 0,
             "updatedAt": None,
         }
-    state = json.loads(row["state_json"])
+    state = parse_state_json(row["state_json"])
     return {
         "state": state,
         "xp": row["xp"],
@@ -187,7 +200,7 @@ def save_progress(db, user_id, state):
     db.execute(
         """
         insert into progress (user_id, state_json, xp, streak, completed_count, miss_count, updated_at)
-        values (?, ?, ?, ?, ?, ?, ?)
+        values (%s, %s, %s, %s, %s, %s, %s)
         on conflict(user_id) do update set
           state_json = excluded.state_json,
           xp = excluded.xp,
@@ -196,7 +209,7 @@ def save_progress(db, user_id, state):
           miss_count = excluded.miss_count,
           updated_at = excluded.updated_at
         """,
-        (user_id, json_dumps(state), xp, streak, completed_count, miss_count, updated_at),
+        (user_id, Jsonb(state), xp, streak, completed_count, miss_count, updated_at),
     )
     return get_progress(db, user_id)
 
@@ -208,7 +221,7 @@ def leaderboard(db, limit=20):
         from progress p
         join users u on u.id = p.user_id
         order by p.xp desc, p.streak desc, p.completed_count desc, p.updated_at asc
-        limit ?
+        limit %s
         """,
         (limit,),
     ).fetchall()
@@ -226,14 +239,22 @@ def leaderboard(db, limit=20):
     ]
 
 
+def cleanup_sessions(db):
+    db.execute("delete from sessions where expires_at <= %s", (now_ts(),))
+
+
 class MLingoHandler(SimpleHTTPRequestHandler):
-    server_version = "MLingo/0.1"
+    server_version = "MLingo/0.2"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin", "*"))
+        origin = self.headers.get("Origin")
+        allowed_origin = ALLOWED_ORIGIN or origin or "*"
+        if ALLOWED_ORIGIN and ALLOWED_ORIGIN != "*" and origin and origin != ALLOWED_ORIGIN:
+            allowed_origin = ALLOWED_ORIGIN
+        self.send_header("Access-Control-Allow-Origin", allowed_origin)
         self.send_header("Access-Control-Allow-Headers", "content-type, authorization")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Credentials", "true")
@@ -289,15 +310,14 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         token = self.auth_token()
         if not token:
             return None
-        row = db.execute(
+        return db.execute(
             """
             select u.* from sessions s
             join users u on u.id = s.user_id
-            where s.token = ? and s.expires_at > ?
+            where s.token = %s and s.expires_at > %s
             """,
             (token, now_ts()),
         ).fetchone()
-        return row
 
     def require_user(self, db):
         user = self.current_user(db)
@@ -310,7 +330,7 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         token = secrets.token_urlsafe(32)
         current = now_ts()
         db.execute(
-            "insert into sessions (token, user_id, created_at, expires_at) values (?, ?, ?, ?)",
+            "insert into sessions (token, user_id, created_at, expires_at) values (%s, %s, %s, %s)",
             (token, user_id, current, current + SESSION_TTL),
         )
         return token
@@ -319,6 +339,11 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             with db_connect() as db:
+                if path == "/api/health" and method == "GET":
+                    db.execute("select 1").fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "database": "postgres"})
+                    return
+
                 if path == "/api/register" and method == "POST":
                     payload = read_json(self)
                     username = normalize_username(str(payload.get("username", "")))
@@ -329,16 +354,19 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     if len(password) < 6:
                         self.send_error_json(HTTPStatus.BAD_REQUEST, "Пароль должен быть минимум 6 символов")
                         return
-                    try:
-                        cur = db.execute(
-                            "insert into users (username, password_hash, created_at) values (?, ?, ?)",
-                            (username, hash_password(password), now_ts()),
-                        )
-                    except sqlite3.IntegrityError:
+                    user = db.execute(
+                        """
+                        insert into users (username, password_hash, created_at)
+                        values (%s, %s, %s)
+                        on conflict(username) do nothing
+                        returning *
+                        """,
+                        (username, hash_password(password), now_ts()),
+                    ).fetchone()
+                    if not user:
                         self.send_error_json(HTTPStatus.CONFLICT, "Такой логин уже занят")
                         return
-                    user = db.execute("select * from users where id = ?", (cur.lastrowid,)).fetchone()
-                    save_progress(db, user["id"], {"xp": 0, "streak": 0, "completed": {}, "completedDates": {}, "misses": {}, "layoutMode": "course"})
+                    save_progress(db, user["id"], empty_progress_state())
                     token = self.create_session(db, user["id"])
                     self.send_json(HTTPStatus.OK, {"ok": True, "token": token, "user": public_user(user), "progress": get_progress(db, user["id"]), "leaderboard": leaderboard(db)}, token=token)
                     return
@@ -347,7 +375,7 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     payload = read_json(self)
                     username = normalize_username(str(payload.get("username", "")))
                     password = str(payload.get("password", ""))
-                    user = db.execute("select * from users where username = ?", (username,)).fetchone()
+                    user = db.execute("select * from users where username = %s", (username,)).fetchone()
                     if not user or not verify_password(password, user["password_hash"]):
                         self.send_error_json(HTTPStatus.UNAUTHORIZED, "Неверный логин или пароль")
                         return
@@ -358,7 +386,7 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                 if path == "/api/logout" and method == "POST":
                     token = self.auth_token()
                     if token:
-                        db.execute("delete from sessions where token = ?", (token,))
+                        db.execute("delete from sessions where token = %s", (token,))
                     self.send_json(HTTPStatus.OK, {"ok": True}, clear_cookie=True)
                     return
 
@@ -387,8 +415,8 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                         return
                     payload = read_json(self)
                     db.execute(
-                        "insert into events (user_id, lesson_id, correct, xp_delta, created_at) values (?, ?, ?, ?, ?)",
-                        (user["id"], str(payload.get("lessonId", "")), 1 if payload.get("correct") else 0, int(payload.get("xpDelta") or 0), now_ts()),
+                        "insert into events (user_id, lesson_id, correct, xp_delta, created_at) values (%s, %s, %s, %s, %s)",
+                        (user["id"], str(payload.get("lessonId", "")), bool(payload.get("correct")), int(payload.get("xpDelta") or 0), now_ts()),
                     )
                     self.send_json(HTTPStatus.OK, {"ok": True})
                     return
@@ -410,9 +438,11 @@ def main():
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 4180)))
     args = parser.parse_args()
     init_db()
+    with db_connect() as db:
+        cleanup_sessions(db)
     server = ThreadingHTTPServer((args.host, args.port), MLingoHandler)
     print(f"MLingo backend on http://{args.host}:{args.port}")
-    print(f"SQLite DB: {DB_PATH}")
+    print("Database: PostgreSQL")
     server.serve_forever()
 
 

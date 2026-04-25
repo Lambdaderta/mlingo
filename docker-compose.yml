@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mlingo
+      POSTGRES_USER: mlingo
+      POSTGRES_PASSWORD: mlingo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlingo -d mlingo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://mlingo:mlingo@db:5432/mlingo
+      MLINGO_ALLOWED_ORIGIN: http://localhost:4180
+      PORT: 4180
+    ports:
+      - "4180:4180"
+
+volumes:
+  postgres_data:

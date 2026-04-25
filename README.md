@@ -2,47 +2,47 @@
 
 Темный PWA-тренажер для ручного ML-кода: короткие упражнения по CV, PyTorch, валидации, метрикам, NumPy/Pandas и бустингу.
 
-## Запуск локально без backend
+Проект source-available: код открыт для чтения, учебы и контрибьютов, но основной публичный инстанс предполагается один, на домене владельца проекта.
+
+## Быстрый запуск через Docker
 
 ```bash
-cd /Users/lambda/projects/ioai/mlingo
-python3 -m http.server 4175
+docker compose up --build
 ```
 
 Открыть:
 
 ```text
-http://127.0.0.1:4175/
+http://localhost:4180/
 ```
 
-В этом режиме прогресс хранится только в `localStorage`.
+Compose поднимает:
 
-## Запуск с backend, аккаунтами и базой
+- `app` — Python backend + статический PWA frontend;
+- `db` — PostgreSQL 16;
+- volume `postgres_data` — локальное постоянное хранилище базы.
 
-Backend написан на Python stdlib + SQLite, без внешних зависимостей:
+## Запуск backend без Docker
+
+Нужен PostgreSQL и Python-зависимости:
 
 ```bash
-cd /Users/lambda/projects/ioai/mlingo
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 python3 server.py --port 4180
 ```
 
-Открыть:
+Переменные окружения:
 
-```text
-http://127.0.0.1:4180/
-```
+- `DATABASE_URL` — PostgreSQL connection string.
+- `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.ru`.
+- `PORT` — порт приложения, по умолчанию `4180`.
 
-Что хранится в `mlingo.db`:
+## API
 
-- пользователи;
-- сессии;
-- полный JSON прогресса;
-- XP, стрик, число пройденных уроков, ошибки;
-- события прохождения уроков;
-- leaderboard.
-
-API:
-
+- `GET /api/health`
 - `POST /api/register`
 - `POST /api/login`
 - `POST /api/logout`
@@ -52,106 +52,66 @@ API:
 - `POST /api/event`
 - `GET /api/leaderboard`
 
+В Postgres хранятся:
+
+- пользователи;
+- сессии;
+- полный JSON прогресса;
+- XP, стрик, число пройденных уроков, ошибки;
+- события прохождения уроков;
+- leaderboard.
+
 ## Что внутри
 
 - `index.html` — оболочка приложения.
 - `styles.css` — desktop/mobile layout, темный интерфейс в стиле `#1E1E1E`.
-- `app.js` — все темы, упражнения, прогресс, стрик, очередь уроков.
-- `server.py` — API, аккаунты, SQLite, leaderboard.
+- `app.js` — темы, упражнения, прогресс, стрик, очередь уроков.
+- `server.py` — API, аккаунты, PostgreSQL, leaderboard.
+- `Dockerfile`, `docker-compose.yml` — локальный и production-friendly запуск.
 - `manifest.webmanifest` — PWA-настройки для установки на телефон.
 - `service-worker.js` — offline/cache для PWA.
-- `.nojekyll` — отключает Jekyll на GitHub Pages, чтобы статические файлы отдавались как есть.
-- `CONTRIBUTING.md` — как добавлять упражнения и готовить PR.
-- `LICENSE` — MIT-лицензия для open-source запуска.
+- `CONTRIBUTING.md` — как добавлять упражнения.
+- `LICENSE` — source-available license.
 
 ## Обучающий формат
-
-Внутри есть несколько типов упражнений:
 
 - `choice`, `order`, `fill`, `bug` — короткий вход без усталости от набора.
 - `fix`, `write` — ручная правка и написание кода, сложность 3-5.
 - Богатые подсказки: кнопка `Подсказка` показывает не только намек, но и мини-словарь терминов вроде `Dice`, `IoU`, `OOF`, `logits`, `leakage`.
 - Адаптивная сложность: новые уровни в теме открываются по мере прохождения.
 
-## Desktop-макеты
-
-Кнопка `Макет` переключает рабочие компоновки:
-
-- `курс` — широкий учебный экран с дорожной картой и панелями снизу.
-- `практика` — lesson-first режим: фокус на текущем упражнении.
-- `студия` — плотный трехколоночный workspace.
-
 ## Мобильная версия
 
-Приложение уже работает как PWA:
+Приложение работает как PWA:
 
 - адаптивная верстка под телефон;
 - нижняя навигация;
 - `manifest.webmanifest` для установки;
 - service worker для кэша;
-- локальный прогресс хранится в `localStorage`.
+- прогресс синхронизируется через аккаунт и Postgres.
 
 На iPhone/Android после деплоя на HTTPS открой сайт и добавь на главный экран:
 
-- iOS Safari: `Share` → `Add to Home Screen`;
-- Android Chrome: меню → `Install app` или `Add to Home screen`.
+- iOS Safari: `Share` -> `Add to Home Screen`;
+- Android Chrome: меню -> `Install app` или `Add to Home screen`.
 
-## Деплой на GitHub Pages
+## Деплой
 
-GitHub Pages подходит только для frontend/PWA без backend. Он не запускает Python/Node сервер и не дает базу данных.
+Рекомендуемый путь для первого публичного запуска:
 
-Самый простой static-only путь:
+1. Хостинг: Render, Railway, Fly.io или VPS.
+2. База: managed PostgreSQL на том же провайдере или Neon/Supabase Postgres.
+3. Один домен для всего приложения: backend отдает и API, и frontend.
+4. HTTPS через провайдера или Cloudflare.
 
-1. Создать репозиторий на GitHub, например `mlingo`.
-2. Положить содержимое папки `mlingo/` в корень репозитория.
-3. Запушить в ветку `main`.
-4. На GitHub открыть `Settings` → `Pages`.
-5. В `Build and deployment` выбрать `Deploy from a branch`.
-6. Выбрать `main` и папку `/root`, затем `Save`.
+Почему не GitHub Pages: Pages подходит только для статического frontend. Здесь нужны аккаунты, база, сессии, leaderboard и API, поэтому нужен web service + Postgres.
 
-После публикации сайт будет доступен примерно так:
+Подробный гайд: [docs/deploy.md](docs/deploy.md).
 
-```text
-https://USERNAME.github.io/mlingo/
+## Проверки
+
+```bash
+node --check app.js
+PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
+docker compose config
 ```
-
-Если проект будет лежать не в корне репозитория, а в папке `docs/`, в настройках Pages выбери `main` + `/docs`.
-
-## Деплой с backend
-
-Для аккаунтов и базы нужен отдельный backend-хостинг:
-
-- Render / Railway / Fly.io — проще всего для `server.py` + SQLite на persistent disk.
-- VPS — максимально контролируемо.
-- Supabase/Firebase — если хочешь готовую авторизацию и managed database, но тогда backend-код надо переписать под их API.
-
-Варианты архитектуры:
-
-1. Frontend и backend вместе на одном Python-сервере: проще всего, `python3 server.py`, один домен, PWA работает без CORS-боли.
-2. Frontend на GitHub Pages, backend на Render/Railway/Fly: нужно указать `window.MLINGO_API_BASE = "https://your-api.example.com"` перед подключением `app.js`.
-
-Для продакшена лучше не держать SQLite на ephemeral filesystem. Нужен persistent disk или Postgres.
-
-## Open source
-
-Проект можно выкладывать на GitHub как обычный open-source репозиторий. Минимальный набор уже есть:
-
-- MIT license;
-- contributing guide;
-- PWA manifest;
-- backend без внешних зависимостей;
-- static-only режим для GitHub Pages;
-- backend режим для аккаунтов, стриков и leaderboard.
-
-## Нативное мобильное приложение
-
-Для личного пользования PWA обычно достаточно. Если захочется именно `.apk` или iOS-wrapper, следующий шаг — обернуть эту же статическую версию через Capacitor:
-
-```text
-npm create @capacitor/app
-npx cap add android
-npx cap add ios
-npx cap sync
-```
-
-Это уже отдельный слой сборки, но сам UI и логика останутся теми же.

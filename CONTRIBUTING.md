@@ -1,11 +1,11 @@
 # Как контрибьютить в MLingo
 
-MLingo устроен так, чтобы новые упражнения можно было добавлять без сборки и тяжелого toolchain.
+MLingo устроен так, чтобы новые упражнения можно было добавлять без тяжелого frontend toolchain. Код открыт для чтения и контрибьютов, production-деплой остается за владельцем проекта.
 
 ## Локальный запуск
 
 ```bash
-python3 server.py --port 4180
+docker compose up --build
 ```
 
 Открой `http://127.0.0.1:4180/`.
@@ -57,11 +57,6 @@ python3 server.py --port 4180
 
 ```bash
 node --check app.js
-python3 -m py_compile server.py
-```
-
-Для `py_compile` в sandbox можно использовать:
-
-```bash
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
+docker compose config
 ```
