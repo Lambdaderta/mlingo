@@ -1,12 +1,6 @@
 const STORAGE_KEY = "mlingo.antivibe.progress.v6";
 const AUTH_TOKEN_KEY = "mlingo.auth.token";
 const API_BASE = window.MLINGO_API_BASE || "";
-const LAYOUT_MODES = ["course", "practice", "studio"];
-const LAYOUT_LABELS = {
-  course: "курс",
-  practice: "практика",
-  studio: "студия",
-};
 
 const topics = [
   {
@@ -434,8 +428,12 @@ const topics = [
         prompt: "Собери перенос батча и модели на device.",
         blocks: ["model = model.to(device)", "x = x.to(device)", "y = y.to(device)", "logits = model(x)"],
         answer: ["model = model.to(device)", "x = x.to(device)", "y = y.to(device)", "logits = model(x)"],
+        answers: [
+          ["model = model.to(device)", "x = x.to(device)", "y = y.to(device)", "logits = model(x)"],
+          ["model = model.to(device)", "y = y.to(device)", "x = x.to(device)", "logits = model(x)"],
+        ],
         hint: "Модель и тензоры должны жить на одном device.",
-        explain: "Ошибка CPU/GPU device mismatch на контесте съедает время без пользы.",
+        explain: "Ошибка CPU/GPU device mismatch на контесте съедает время без пользы. `x` и `y` можно переносить в любом порядке, главное - до forward.",
       },
       {
         id: "torch-ce-shapes",
@@ -469,19 +467,16 @@ const topics = [
       },
       {
         id: "torch-zero-grad-bug",
-        kind: "bug",
+        kind: "fix",
         title: "Градиенты копятся",
-        prompt: "Какой строки не хватает перед forward?",
-        lines: [
-          "for x, y in loader:",
-          "    logits = model(x)",
-          "    loss = criterion(logits, y)",
-          "    loss.backward()",
-          "    optimizer.step()",
-        ],
-        answer: 1,
-        hint: "Перед forward обычно чистим старые gradients.",
-        explain: "Нужно добавить `optimizer.zero_grad()` до forward/backward.",
+        prompt: "Исправь train loop: добавь одну строку так, чтобы градиенты прошлого батча не копились.",
+        code: "for x, y in loader:\n    logits = model(x)\n    loss = criterion(logits, y)\n    loss.backward()\n    optimizer.step()",
+        answer: "for x, y in loader:\n    optimizer.zero_grad()\n    logits = model(x)\n    loss = criterion(logits, y)\n    loss.backward()\n    optimizer.step()",
+        testsText: "Проверь себя: zero_grad должен быть внутри цикла до forward/backward.",
+        hint: "В PyTorch `.grad` накапливается. В этом упражнении надо именно дописать строку в код.",
+        explain: "`optimizer.zero_grad()` стоит внутри цикла перед forward: следующий `backward()` считает градиенты текущего батча без накопленных старых.",
+        difficulty: 2,
+        strictLines: true,
       },
       {
         id: "torch-clip-grad",
@@ -492,6 +487,45 @@ const topics = [
         blanks: ["clip_grad_norm_"],
         hint: "В имени есть norm и подчёркивание на конце.",
         explain: "Clipping полезен для RNN/transformer и нестабильного обучения.",
+      },
+      {
+        id: "torch-train-step-write",
+        kind: "write",
+        title: "Train step руками",
+        prompt: "Напиши тело одной train-итерации: очистка градиентов, forward, loss, backward, step.",
+        starter: "for x, y in loader:\n    ",
+        answer: "for x, y in loader:\n    optimizer.zero_grad()\n    logits = model(x)\n    loss = criterion(logits, y)\n    loss.backward()\n    optimizer.step()",
+        testsText: "Синтаксис должен быть полноценным Python: отступы, скобки, порядок строк.",
+        hint: "Это тот же скелет, но теперь без блоков-подсказок.",
+        explain: "Такой train step должен писаться почти автоматически: `zero_grad → forward → loss → backward → step`.",
+        difficulty: 3,
+        strictLines: true,
+      },
+      {
+        id: "torch-val-loop-fix",
+        kind: "fix",
+        title: "Validation loop",
+        prompt: "Исправь validation loop: модель должна быть в eval-режиме, а граф autograd не должен строиться.",
+        code: "model.train()\nfor x, y in valid_loader:\n    logits = model(x)\n    loss = criterion(logits, y)\n    val_loss += loss.item()",
+        answer: "model.eval()\nwith torch.no_grad():\n    for x, y in valid_loader:\n        logits = model(x)\n        loss = criterion(logits, y)\n        val_loss += loss.item()",
+        testsText: "Нужны `model.eval()` и `with torch.no_grad():`; цикл должен быть внутри context manager.",
+        hint: "Валидация не обновляет веса и не копит graph.",
+        explain: "`eval()` переключает dropout/batchnorm, `no_grad()` экономит память и защищает от случайного backward.",
+        difficulty: 3,
+        strictLines: true,
+      },
+      {
+        id: "torch-grad-accum-write",
+        kind: "write",
+        title: "Accumulation x4",
+        prompt: "Напиши gradient accumulation на 4 mini-batch: loss делим на 4, step делаем только каждый четвертый batch.",
+        starter: "optimizer.zero_grad()\nfor i, (x, y) in enumerate(loader):\n    ",
+        answer: "optimizer.zero_grad()\nfor i, (x, y) in enumerate(loader):\n    loss = criterion(model(x), y) / 4\n    loss.backward()\n    if (i + 1) % 4 == 0:\n        optimizer.step()\n        optimizer.zero_grad()",
+        testsText: "Обязательные элементы: `/ 4`, `loss.backward()`, `if (i + 1) % 4 == 0`, `step`, `zero_grad`.",
+        hint: "Если не делить loss, градиент станет примерно в 4 раза больше.",
+        explain: "Accumulation имитирует больший batch, но требует аккуратного порядка `backward` и редкого `step`.",
+        difficulty: 4,
+        strictLines: true,
       },
     ],
   },
@@ -2743,6 +2777,7 @@ let els = {};
 let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
+let authCheckTimer = null;
 
 if (!topics.some((topic) => topic.id === currentTopicId)) {
   currentTopicId = topics[0].id;
@@ -2752,7 +2787,6 @@ if (!topics.some((topic) => topic.id === currentTopicId)) {
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
   bindEvents();
-  applyLayoutMode();
   renderAll();
   bootstrapAccount();
   registerServiceWorker();
@@ -2797,12 +2831,14 @@ function cacheElements() {
     "profileMisses",
     "focusModeButton",
     "dailyButton",
-    "layoutModeButton",
     "queueList",
     "accountButton",
     "authModal",
     "authCloseButton",
     "authUsername",
+    "authEmail",
+    "authUsernameHint",
+    "authEmailHint",
     "authPassword",
     "loginButton",
     "registerButton",
@@ -2837,7 +2873,6 @@ function bindEvents() {
     document.body.classList.toggle("focus-mode");
     els.focusModeButton.textContent = document.body.classList.contains("focus-mode") ? "Весь UI" : "Режим фокуса";
   });
-  els.layoutModeButton?.addEventListener("click", cycleLayoutMode);
   els.queueList?.addEventListener("click", handleQueueClick);
   els.accountButton?.addEventListener("click", openAuthModal);
   els.authCloseButton?.addEventListener("click", closeAuthModal);
@@ -2847,6 +2882,8 @@ function bindEvents() {
   els.loginButton?.addEventListener("click", () => submitAuth("login"));
   els.registerButton?.addEventListener("click", () => submitAuth("register"));
   els.logoutButton?.addEventListener("click", logout);
+  els.authUsername?.addEventListener("input", scheduleAuthChecks);
+  els.authEmail?.addEventListener("input", scheduleAuthChecks);
 }
 
 function renderAll() {
@@ -2873,6 +2910,7 @@ function ensureCurrentLessonAvailable() {
 
 function setScreen(screen, persist = true) {
   currentScreen = screen;
+  document.body.dataset.screen = screen;
   document.querySelectorAll(".app-screen").forEach((section) => {
     section.classList.toggle("is-active", section.id === `screen-${screen}`);
   });
@@ -3059,6 +3097,68 @@ function renderCodeWrite(lesson, placeholder) {
       ${lesson.testsText ? `<p class="tests-text">${escapeHtml(lesson.testsText)}</p>` : ""}
     </div>
   `;
+  document.getElementById("codeAnswer")?.addEventListener("keydown", handleCodeTextareaKeydown);
+}
+
+function handleCodeTextareaKeydown(event) {
+  if (event.key !== "Tab") return;
+  event.preventDefault();
+  const textarea = event.currentTarget;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const value = textarea.value;
+  if (event.shiftKey) {
+    unindentSelection(textarea, start, end, value);
+  } else {
+    indentSelection(textarea, start, end, value);
+  }
+}
+
+function indentSelection(textarea, start, end, value) {
+  const indent = "    ";
+  if (start === end || !value.slice(start, end).includes("\n")) {
+    textarea.setRangeText(indent, start, end, "end");
+    return;
+  }
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = value.indexOf("\n", end);
+  const safeLineEnd = lineEnd === -1 ? value.length : lineEnd;
+  const selected = value.slice(lineStart, safeLineEnd);
+  const updated = selected
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+  textarea.setRangeText(updated, lineStart, safeLineEnd, "select");
+  textarea.selectionStart = lineStart;
+  textarea.selectionEnd = lineStart + updated.length;
+}
+
+function unindentSelection(textarea, start, end, value) {
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = start === end ? start : value.indexOf("\n", end);
+  const safeLineEnd = lineEnd === -1 ? value.length : lineEnd;
+  const selected = value.slice(lineStart, safeLineEnd);
+  const lines = selected.split("\n");
+  let removedBeforeStart = 0;
+  let removedTotal = 0;
+  const updated = lines
+    .map((line, index) => {
+      const withoutIndent = line.replace(/^( {1,4}|\t)/, "");
+      const removed = line.length - withoutIndent.length;
+      if (index === 0) removedBeforeStart = Math.min(removed, Math.max(0, start - lineStart));
+      removedTotal += removed;
+      return withoutIndent;
+    })
+    .join("\n");
+  textarea.setRangeText(updated, lineStart, safeLineEnd, "select");
+  if (start === end) {
+    const caret = Math.max(lineStart, start - removedBeforeStart);
+    textarea.selectionStart = caret;
+    textarea.selectionEnd = caret;
+  } else {
+    textarea.selectionStart = Math.max(lineStart, start - removedBeforeStart);
+    textarea.selectionEnd = Math.max(textarea.selectionStart, end - removedTotal);
+  }
 }
 
 function handleChallengeClick(event) {
@@ -3108,7 +3208,10 @@ function showHint() {
 function buildHintText(lesson) {
   const terms = getLessonTerms(lesson);
   const pieces = [];
-  if (lesson.hint) pieces.push(`Намек по задаче: ${lesson.hint}`);
+  if (lesson.hint) pieces.push(`Идея задачи: ${lesson.hint}`);
+  const concept = buildConceptHint(lesson);
+  if (concept) pieces.push(concept);
+  if (lesson.testsText) pieces.push(`Самопроверка: ${lesson.testsText}`);
   if (terms.length) {
     pieces.push(
       `Мини-словарь:\n${terms
@@ -3122,18 +3225,285 @@ function buildHintText(lesson) {
         .join("\n\n")}`,
     );
   }
-  pieces.push("Как думать: сначала проверь shape, потом dtype, потом где нужна вероятность, а где logits/классы.");
   return pieces.join("\n\n");
 }
 
 function buildMistakeText(lesson) {
   const terms = getLessonTerms(lesson);
-  const termNames = terms
+  const pieces = [];
+  const attempt = describeCurrentAttempt(lesson);
+  const mismatch = buildMismatchHint(lesson);
+  const concept = buildConceptHint(lesson);
+
+  if (attempt) pieces.push(attempt);
+  if (mismatch) pieces.push(mismatch);
+  if (lesson.hint) pieces.push(`Ключевая идея: ${lesson.hint}`);
+  if (concept) pieces.push(concept);
+  if (lesson.testsText) pieces.push(`Мини-чеклист: ${lesson.testsText}`);
+  if (terms.length) {
+    const term = terms[0];
+    pieces.push(`Термин рядом с ошибкой: ${term.title} — ${term.body}`);
+  }
+
+  return pieces.filter(Boolean).join("\n\n");
+}
+
+function describeCurrentAttempt(lesson) {
+  if (lesson.kind === "choice") {
+    return selectedOption ? `Ты выбрал: ${selectedOption}.` : "Ты пока не выбрал вариант.";
+  }
+  if (lesson.kind === "bug") {
+    return selectedBugLine === null ? "Ты пока не выбрал строку." : `Ты выбрал строку ${selectedBugLine + 1}.`;
+  }
+  if (lesson.kind === "order") {
+    if (!selectedBlocks.length) return "Ты пока не собрал ни одной строки.";
+    return `Сейчас твоя цепочка по смыслу:\n${selectedBlocks.map((line, index) => `${index + 1}. ${lineConcept(line)}`).join("\n")}`;
+  }
+  if (lesson.kind === "fill") {
+    const wrong = lesson.blanks
+      .map((answer, index) => {
+        const input = document.querySelector(`[data-blank-index="${index}"]`);
+        const value = input?.value || "";
+        return normalizeCode(value) === normalizeCode(answer) ? null : `пропуск ${index + 1}: «${value || "пусто"}»`;
+      })
+      .filter(Boolean);
+    return wrong.length ? `Не совпали: ${wrong.join(", ")}.` : "";
+  }
+  if (lesson.kind === "fix" || lesson.kind === "write") {
+    const lines = splitUsefulLines(typedCode);
+    return lines.length ? `В твоём коде сейчас ${lines.length} непустых строк. Сравниваю по смысловым действиям, а не просто по общей идее.` : "Код пока пустой.";
+  }
+  return "";
+}
+
+function buildMismatchHint(lesson) {
+  if (lesson.kind === "order") return buildOrderMismatchHint(lesson);
+  if (lesson.kind === "choice") return buildChoiceMismatchHint(lesson);
+  if (lesson.kind === "fill") return buildFillMismatchHint(lesson);
+  if (lesson.kind === "bug") return buildBugMismatchHint(lesson);
+  if (lesson.kind === "fix" || lesson.kind === "write") return buildCodeMismatchHint(lesson);
+  return "";
+}
+
+function buildOrderMismatchHint(lesson) {
+  const best = chooseClosestOrderAnswer(lesson);
+  if (!best.length) return "";
+  const mismatchIndex = firstMismatchIndex(selectedBlocks, best);
+  if (mismatchIndex === -1 && selectedBlocks.length < best.length) {
+    return `Следующий смысловой шаг: ${lineConcept(best[selectedBlocks.length])}.`;
+  }
+  if (mismatchIndex === -1) return "";
+  const got = selectedBlocks[mismatchIndex];
+  const expected = best[mismatchIndex];
+  if (!got) return `Начни с действия: ${lineConcept(expected)}.`;
+  return `Первый разъезд на шаге ${mismatchIndex + 1}: у тебя там «${lineConcept(got)}», а в этой логике сначала нужно «${lineConcept(expected)}».`;
+}
+
+function buildChoiceMismatchHint(lesson) {
+  if (!selectedOption) return "Сначала выбери вариант, потом смотри, какую сущность реально принимает функция/метрика в условии.";
+  const selected = selectedOption.toLowerCase();
+  if (selected.includes("sigmoid") || selected.includes("softmax") || selected.includes("argmax")) {
+    return "Ты выбрал вариант с преобразованием выхода модели. Проверь, спрашивают ли здесь loss/training или inference/metric: loss часто хочет logits, а probability/class id нужны позже.";
+  }
+  if (selected.includes("one-hot") || selected.includes("float") || selected.includes("long")) {
+    return "Тут важно не название loss, а формат target: class indices обычно `long`, бинарные/регрессионные target обычно `float`.";
+  }
+  return "Сравни варианты по контракту функции: что она принимает на вход и что возвращает. Не выбирай по знакомому слову, выбери по shape/dtype/стадии pipeline.";
+}
+
+function buildFillMismatchHint(lesson) {
+  const wrong = lesson.blanks
+    .map((answer, index) => {
+      const input = document.querySelector(`[data-blank-index="${index}"]`);
+      const value = input?.value || "";
+      if (normalizeCode(value) === normalizeCode(answer)) return null;
+      return `Пропуск ${index + 1}: смотри на выражение вокруг \`____\`; здесь нужен ${lineConcept(answer)}.`;
+    })
+    .filter(Boolean);
+  return wrong.join("\n");
+}
+
+function buildBugMismatchHint(lesson) {
+  if (selectedBugLine === null) return "Ищи строку, где нарушен контракт: неправильный dtype, shape, leakage, device или порядок pipeline.";
+  const selected = lesson.lines?.[selectedBugLine] || "";
+  return `Выбранная строка по смыслу: ${lineConcept(selected)}. Если это не ломает контракт из условия, ищи строку, где данные впервые становятся неправильными для следующей операции.`;
+}
+
+function buildCodeMismatchHint(lesson) {
+  const answer = chooseClosestTextAnswer(lesson);
+  const answerLines = splitUsefulLines(answer);
+  const userLines = splitUsefulLines(typedCode);
+  if (!answerLines.length) return "";
+
+  const missing = answerLines
+    .filter((line) => isImportantLine(line) && !userLines.some((candidate) => equivalentCodeLine(candidate, line)))
     .slice(0, 3)
-    .map((term) => term.title)
-    .join(", ");
-  const base = "Остановись на секунду: проверь порядок строк, shape и dtype. Если есть loss/metric, отдельно подумай, что она принимает: logits, probability или class ids.";
-  return termNames ? `${base}\n\nТермины этого урока: ${termNames}. Нажми «Подсказка», там теперь есть мини-разбор.` : base;
+    .map((line) => `не найдено действие: ${lineConcept(line)}`);
+
+  const diffIndex = firstDifferentLineIndex(userLines, answerLines);
+  const diff = diffIndex === -1 ? "" : `Первый разъезд примерно на строке ${diffIndex + 1}: у тебя «${lineConcept(userLines[diffIndex] || "пусто")}», а нужно действие «${lineConcept(answerLines[diffIndex])}».`;
+  const syntax = lesson.strictLines ? "Для этой задачи важны отступы, двоеточия после `for/if/with` и скобки у вызовов." : "";
+  return [diff, missing.join("\n"), syntax].filter(Boolean).join("\n");
+}
+
+function buildConceptHint(lesson) {
+  const text = [
+    lesson.title,
+    lesson.prompt,
+    lesson.code,
+    lesson.starter,
+    lesson.hint,
+    lesson.explain,
+    ...(lesson.blocks || []),
+    ...(lesson.options || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (text.includes("eval") || text.includes("no_grad") || text.includes("valid")) {
+    return "Validation-инвариант: `eval()` фиксирует поведение dropout/batchnorm, `no_grad()` выключает граф, а метрика должна повторять leaderboard.";
+  }
+  if (text.includes("device") || text.includes("cuda")) {
+    return "Device-инвариант: модель, входы и target должны оказаться на одном device до операции, которая их смешивает.";
+  }
+  if (text.includes("zero_grad") || text.includes("backward") || text.includes("optimizer")) {
+    return "Train-step инвариант: очистить старые `.grad`, сделать forward, посчитать loss, вызвать backward, затем обновить веса.";
+  }
+  if (text.includes("accumulation")) {
+    return "Gradient accumulation: `backward()` вызывается каждый mini-batch, а `step()` и `zero_grad()` только раз в N mini-batch; loss обычно делится на N.";
+  }
+  if (text.includes("bcewithlogits") || text.includes("crossentropy") || text.includes("logits")) {
+    return "Pipeline: модель даёт logits. Training loss часто получает logits напрямую; probability (`sigmoid/softmax`) и class ids (`argmax/threshold`) обычно появляются уже для метрик, inference или postprocess.";
+  }
+  if (text.includes("dice") || text.includes("iou") || text.includes("threshold")) {
+    return "Для segmentation держи цепочку: logits → probability → threshold/argmax → mask → metric/postprocess. Loss и metric могут хотеть разные стадии этой цепочки.";
+  }
+  if (text.includes("bbox") || text.includes("np.where") || text.includes("mask_to_bbox")) {
+    return "В 2D маске координаты идут как `(y, x)`: строки — это y, столбцы — это x. Bbox обычно возвращают как `[x1, y1, x2, y2]`.";
+  }
+  if (text.includes("target encoding") || text.includes("leakage") || text.includes("fold")) {
+    return "Leakage-инвариант: всё, что делает `fit` или считает статистику, должно видеть только train/fold-train. Validation имитирует будущее.";
+  }
+  if (text.includes("candidate") || text.includes("reranker") || text.includes("recsys")) {
+    return "RecSys-инвариант: сначала генерируешь кандидатов без будущего и seen items, потом reranker сортирует кандидаты внутри каждого user.";
+  }
+  if (text.includes("density") || text.includes("count")) {
+    return "Counting-инвариант: сумма density map — это predicted count; validation должна считать ошибку количества, если leaderboard про count.";
+  }
+  if (text.includes("dataset") || text.includes("dataloader") || text.includes("collate")) {
+    return "Dataset возвращает один sample, DataLoader собирает batch, а `collate_fn` нужен, когда стандартный stack не подходит.";
+  }
+  return lesson.explain ? `Смысл задачи: ${lesson.explain}` : "";
+}
+
+function chooseClosestOrderAnswer(lesson) {
+  return acceptedAnswers(lesson).reduce((best, answer) => (commonPrefixLength(selectedBlocks, answer) > commonPrefixLength(selectedBlocks, best) ? answer : best), acceptedAnswers(lesson)[0] || []);
+}
+
+function chooseClosestTextAnswer(lesson) {
+  const user = normalizeCode(typedCode);
+  return acceptedAnswers(lesson).reduce((best, answer) => {
+    const bestScore = commonTokenScore(user, normalizeCode(best));
+    const score = commonTokenScore(user, normalizeCode(answer));
+    return score > bestScore ? answer : best;
+  }, acceptedAnswers(lesson)[0] || "");
+}
+
+function commonPrefixLength(a, b) {
+  let index = 0;
+  while (index < a.length && index < b.length && a[index] === b[index]) index += 1;
+  return index;
+}
+
+function firstMismatchIndex(a, b) {
+  const max = Math.max(a.length, b.length);
+  for (let index = 0; index < max; index += 1) {
+    if (a[index] !== b[index]) return index;
+  }
+  return -1;
+}
+
+function firstDifferentLineIndex(a, b) {
+  const max = Math.max(a.length, b.length);
+  for (let index = 0; index < max; index += 1) {
+    if (normalizeWrittenCode(a[index] || "") !== normalizeWrittenCode(b[index] || "")) return index;
+  }
+  return -1;
+}
+
+function splitUsefulLines(value) {
+  return String(value || "")
+    .replaceAll("\r\n", "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim());
+}
+
+function equivalentCodeLine(a, b) {
+  return normalizeCode(a) === normalizeCode(b);
+}
+
+function isImportantLine(line) {
+  const trimmed = String(line || "").trim();
+  return Boolean(trimmed) && !trimmed.startsWith("#");
+}
+
+function commonTokenScore(a, b) {
+  if (!a || !b) return 0;
+  let score = 0;
+  const limit = Math.min(a.length, b.length);
+  for (let index = 0; index < limit; index += 1) {
+    if (a[index] === b[index]) score += 1;
+  }
+  return score;
+}
+
+function lineConcept(line) {
+  const raw = String(line || "").trim();
+  const text = raw.toLowerCase();
+  if (!raw) return "пустая строка";
+  if (text.includes("zero_grad")) return "очистка старых градиентов";
+  if (text.includes("backward")) return "расчёт градиентов через backward";
+  if (text.includes("optimizer.step") || text.includes("scaler.step")) return "обновление весов оптимизатором";
+  if (text.includes("scaler.update")) return "обновление GradScaler после AMP step";
+  if (text.includes("autocast")) return "mixed precision forward/loss внутри autocast";
+  if (text.includes("criterion") || text.includes("loss")) return "посчитать loss из prediction и target";
+  if (text.includes("model.eval")) return "переключение модели в eval-режим";
+  if (text.includes("model.train")) return "переключение модели в train-режим";
+  if (text.includes("no_grad")) return "выключение autograd graph";
+  if (text.includes("to(device)")) return "перенос tensor/model на device";
+  if (text.includes("model(") || text.includes("logits") || text.includes("pred =")) return "forward: получить prediction/logits";
+  if (text.includes("sigmoid")) return "перевести logits в probability для binary задачи";
+  if (text.includes("softmax")) return "перевести logits в распределение вероятностей";
+  if (text.includes("argmax")) return "выбрать class id по максимальному score";
+  if (text.includes("threshold") || text.includes(">")) return "пороговать probability в дискретную маску/решение";
+  if (text.includes("permute")) return "переставить оси изображения, например HWC → CHW";
+  if (text.includes("cvtcolor") || text.includes("bgr2rgb")) return "перевести OpenCV BGR в RGB";
+  if (text.includes("imread")) return "прочитать изображение с диска";
+  if (text.includes("astype") || text.includes("float")) return "привести dtype к float для модели/loss";
+  if (text.includes("long")) return "привести target к long class ids";
+  if (text.includes("nearest")) return "resize маски без смешивания классов";
+  if (text.includes("bilinear")) return "плавный resize изображения, но не class mask";
+  if (text.includes("np.where") || text.includes("torch.where")) return "найти координаты foreground/условия";
+  if (text.includes("logical_and") || text.includes("intersection")) return "посчитать пересечение масок";
+  if (text.includes("logical_or") || text.includes("union")) return "посчитать объединение масок";
+  if (text.includes("sum")) return "суммирование по нужным осям";
+  if (text.includes("mean")) return "усреднение score/loss";
+  if (text.includes("groupby")) return "агрегация по группе";
+  if (text.includes("fit_transform")) return "опасный fit+transform, проверь leakage";
+  if (text.includes(".fit(")) return "fit только на train/fold-train";
+  if (text.includes(".transform(")) return "transform готовой статистикой";
+  if (text.includes("stratify")) return "сохранить баланс классов в split";
+  if (text.includes("argsort") || text.includes("sort_values")) return "сортировка score/rank";
+  if (text.includes("value_counts")) return "частоты категорий/items";
+  if (text.includes("clip_grad")) return "ограничить норму градиентов";
+  if (text.includes("clip")) return "обрезать значения в безопасный диапазон";
+  if (text.includes("return")) return "вернуть результат нужного формата";
+  if (text.startsWith("for ")) return "цикл по batch/object/fold";
+  if (text.startsWith("if ")) return "ветвление по условию";
+  if (text.startsWith("with ")) return "context manager";
+  return `строка \`${raw.length > 60 ? `${raw.slice(0, 57)}...` : raw}\``;
 }
 
 function getLessonTerms(lesson) {
@@ -3157,8 +3527,8 @@ function getLessonTerms(lesson) {
 function checkAnswer() {
   const lesson = getCurrentLesson();
   let ok = false;
-  if (lesson.kind === "order") ok = arraysEqual(selectedBlocks, lesson.answer);
-  if (lesson.kind === "choice") ok = selectedOption === lesson.answer;
+  if (lesson.kind === "order") ok = acceptedAnswers(lesson).some((answer) => arraysEqual(selectedBlocks, answer));
+  if (lesson.kind === "choice") ok = acceptedAnswers(lesson).includes(selectedOption);
   if (lesson.kind === "fill") {
     ok = lesson.blanks.every((answer, index) => {
       const input = document.querySelector(`[data-blank-index="${index}"]`);
@@ -3169,7 +3539,11 @@ function checkAnswer() {
   if (lesson.kind === "fix" || lesson.kind === "write") {
     const input = document.getElementById("codeAnswer");
     typedCode = input?.value || "";
-    ok = normalizeCode(typedCode) === normalizeCode(lesson.answer);
+    ok = acceptedAnswers(lesson).some((answer) =>
+      lesson.strictLines
+        ? normalizeWrittenCode(typedCode) === normalizeWrittenCode(answer)
+        : normalizeCode(typedCode) === normalizeCode(answer),
+    );
   }
 
   if (ok) {
@@ -3352,11 +3726,23 @@ function showAuthStatus(text, good = false) {
 
 async function submitAuth(mode) {
   const username = els.authUsername.value.trim();
+  const email = els.authEmail?.value.trim() || "";
+  const identity = username || email;
   const password = els.authPassword.value;
+  if (mode === "register" && !email) {
+    showAuthStatus("Для регистрации нужна почта.");
+    els.authEmail?.focus();
+    return;
+  }
+  if (!identity) {
+    showAuthStatus("Введи логин или почту.");
+    els.authUsername?.focus();
+    return;
+  }
   try {
     const data = await apiRequest(`/api/${mode}`, {
       method: "POST",
-      body: { username, password },
+      body: mode === "register" ? { username, email, password } : { username: identity, password },
       skipAuth: true,
     });
     localStorage.setItem(AUTH_TOKEN_KEY, data.token);
@@ -3368,6 +3754,48 @@ async function submitAuth(mode) {
     showAuthStatus(mode === "login" ? "Вошёл. Прогресс синхронизирован." : "Аккаунт создан. Прогресс теперь в базе.", true);
   } catch (error) {
     showAuthStatus(error.message);
+  }
+}
+
+function scheduleAuthChecks() {
+  clearTimeout(authCheckTimer);
+  authCheckTimer = setTimeout(checkAuthAvailability, 260);
+}
+
+function setAuthHint(element, text, state = "") {
+  if (!element) return;
+  element.textContent = text;
+  element.className = `auth-hint ${state ? `is-${state}` : ""}`;
+}
+
+async function checkAuthAvailability() {
+  const username = els.authUsername?.value.trim() || "";
+  const email = els.authEmail?.value.trim() || "";
+
+  if (!username) {
+    setAuthHint(els.authUsernameHint, "3-24 символа: буквы, цифры, _-.");
+  } else if (username.length < 3) {
+    setAuthHint(els.authUsernameHint, "Коротковато: минимум 3 символа.", "bad");
+  } else {
+    try {
+      const data = await apiRequest(`/api/check-username?username=${encodeURIComponent(username)}`, { skipAuth: true });
+      setAuthHint(els.authUsernameHint, data.message || (data.available ? "Свободен" : "Уже занят"), data.available ? "good" : "bad");
+    } catch {
+      setAuthHint(els.authUsernameHint, "Проверю при создании аккаунта.");
+    }
+  }
+
+  if (!email) {
+    setAuthHint(els.authEmailHint, "Нужна при создании аккаунта. Войти можно по логину или почте.");
+  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    setAuthHint(els.authEmailHint, "Похоже, в почте ошибка.", "bad");
+  } else {
+    try {
+      const data = await apiRequest(`/api/check-email?email=${encodeURIComponent(email)}`, { skipAuth: true });
+      setAuthHint(els.authEmailHint, data.message || (data.available ? "Почта свободна" : "Почта уже занята"), data.available ? "good" : "bad");
+    } catch {
+      setAuthHint(els.authEmailHint, "Проверю при создании аккаунта.");
+    }
   }
 }
 
@@ -3415,7 +3843,6 @@ function mergeRemoteProgress(progress) {
   state.misses = { ...(remote.misses || {}), ...(state.misses || {}) };
   state.xp = Math.max(Number(state.xp || 0), Number(progress.xp || remote.xp || 0));
   state.streak = Math.max(Number(state.streak || 0), Number(progress.streak || remote.streak || 0));
-  state.layoutMode = state.layoutMode || remote.layoutMode || "course";
   isApplyingRemote = false;
 }
 
@@ -3505,21 +3932,6 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-function cycleLayoutMode() {
-  const current = state.layoutMode || LAYOUT_MODES[0];
-  const next = LAYOUT_MODES[(LAYOUT_MODES.indexOf(current) + 1) % LAYOUT_MODES.length];
-  state.layoutMode = next;
-  applyLayoutMode();
-  if (next === "practice") setScreen("lesson");
-  saveState();
-}
-
-function applyLayoutMode() {
-  const mode = state.layoutMode || LAYOUT_MODES[0];
-  document.body.dataset.layout = mode;
-  if (els.layoutModeButton) els.layoutModeButton.textContent = `Макет: ${LAYOUT_LABELS[mode]}`;
-}
-
 function getCurrentTopic() {
   return topics.find((topic) => topic.id === currentTopicId) || topics[0];
 }
@@ -3572,11 +3984,10 @@ function loadState() {
       completed: {},
       completedDates: {},
       misses: {},
-      layoutMode: "course",
       ...parsed,
     };
   } catch {
-    return { xp: 0, streak: 0, completed: {}, completedDates: {}, misses: {}, layoutMode: "course" };
+    return { xp: 0, streak: 0, completed: {}, completedDates: {}, misses: {} };
   }
 }
 
@@ -3596,8 +4007,21 @@ function arraysEqual(a, b) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+function acceptedAnswers(lesson) {
+  return lesson.answers || [lesson.answer];
+}
+
 function normalizeCode(value) {
   return value.replace(/\s+/g, "").trim();
+}
+
+function normalizeWrittenCode(value) {
+  return String(value)
+    .replaceAll("\r\n", "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
 }
 
 function formatFeedbackText(text) {

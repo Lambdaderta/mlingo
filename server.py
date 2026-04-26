@@ -6,13 +6,14 @@ import hmac
 import http.cookies
 import json
 import os
+import re
 import secrets
 import time
 from datetime import date, timedelta
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import psycopg
 from psycopg.rows import dict_row
@@ -23,6 +24,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://mlingo:mlingo@localh
 ALLOWED_ORIGIN = os.environ.get("MLINGO_ALLOWED_ORIGIN", "")
 SESSION_TTL = 60 * 60 * 24 * 30
 PBKDF2_ITERATIONS = 220_000
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def now_ts():
@@ -44,11 +46,13 @@ def init_db():
             create table if not exists users (
               id bigserial primary key,
               username text not null unique,
+              email text,
               password_hash text not null,
               created_at bigint not null
             )
             """
         )
+        db.execute("alter table users add column if not exists email text")
         db.execute(
             """
             create table if not exists sessions (
@@ -88,6 +92,7 @@ def init_db():
         db.execute("create index if not exists sessions_expires_at_idx on sessions(expires_at)")
         db.execute("create index if not exists events_user_created_idx on events(user_id, created_at desc)")
         db.execute("create index if not exists progress_leaderboard_idx on progress(xp desc, streak desc, completed_count desc, updated_at asc)")
+        db.execute("create unique index if not exists users_email_lower_unique_idx on users (lower(email)) where email is not null")
 
 
 def read_json(handler):
@@ -103,6 +108,14 @@ def read_json(handler):
 
 def normalize_username(value):
     return "".join(ch for ch in value.strip().lower() if ch.isalnum() or ch in "_-.")
+
+
+def normalize_email(value):
+    return value.strip().lower()
+
+
+def is_valid_email(value):
+    return 5 <= len(value) <= 254 and bool(EMAIL_RE.match(value))
 
 
 def hash_password(password, salt=None):
@@ -126,7 +139,7 @@ def verify_password(password, stored):
 
 
 def empty_progress_state():
-    return {"xp": 0, "streak": 0, "completed": {}, "completedDates": {}, "misses": {}, "layoutMode": "course"}
+    return {"xp": 0, "streak": 0, "completed": {}, "completedDates": {}, "misses": {}}
 
 
 def state_stats(state):
@@ -155,6 +168,7 @@ def public_user(row):
     return {
         "id": row["id"],
         "username": row["username"],
+        "email": row.get("email"),
         "createdAt": row["created_at"],
     }
 
@@ -268,6 +282,15 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/"):
             self.handle_api("GET")
             return
+        static_path = urlparse(self.path).path
+        if static_path == "/app":
+            original_path = self.path
+            self.path = "/index.html"
+            try:
+                super().do_GET()
+            finally:
+                self.path = original_path
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -336,7 +359,8 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         return token
 
     def handle_api(self, method):
-        path = urlparse(self.path).path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
         try:
             with db_connect() as db:
                 if path == "/api/health" and method == "GET":
@@ -344,28 +368,58 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     self.send_json(HTTPStatus.OK, {"ok": True, "database": "postgres"})
                     return
 
+                if path == "/api/check-username" and method == "GET":
+                    query = parse_qs(parsed_url.query)
+                    username = normalize_username(str((query.get("username") or [""])[0]))
+                    if len(username) < 3 or len(username) > 24:
+                        self.send_json(HTTPStatus.OK, {"ok": True, "username": username, "available": False, "message": "3-24 символа: буквы, цифры, _-."})
+                        return
+                    exists = db.execute("select 1 from users where username = %s", (username,)).fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "username": username, "available": not bool(exists), "message": "Свободен" if not exists else "Уже занят"})
+                    return
+
+                if path == "/api/check-email" and method == "GET":
+                    query = parse_qs(parsed_url.query)
+                    email = normalize_email(str((query.get("email") or [""])[0]))
+                    if not is_valid_email(email):
+                        self.send_json(HTTPStatus.OK, {"ok": True, "email": email, "available": False, "message": "Нужна рабочая почта"})
+                        return
+                    exists = db.execute("select 1 from users where lower(email) = lower(%s)", (email,)).fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "email": email, "available": not bool(exists), "message": "Почта свободна" if not exists else "Почта уже занята"})
+                    return
+
                 if path == "/api/register" and method == "POST":
                     payload = read_json(self)
                     username = normalize_username(str(payload.get("username", "")))
+                    email = normalize_email(str(payload.get("email", "")))
                     password = str(payload.get("password", ""))
                     if len(username) < 3 or len(username) > 24:
                         self.send_error_json(HTTPStatus.BAD_REQUEST, "Логин: 3-24 символа, буквы/цифры/_-.")
                         return
+                    if not is_valid_email(email):
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Введи нормальную почту для восстановления и синхронизации")
+                        return
                     if len(password) < 6:
                         self.send_error_json(HTTPStatus.BAD_REQUEST, "Пароль должен быть минимум 6 символов")
                         return
+                    existing = db.execute(
+                        "select username, email from users where username = %s or lower(email) = lower(%s)",
+                        (username, email),
+                    ).fetchone()
+                    if existing:
+                        if existing["username"] == username:
+                            self.send_error_json(HTTPStatus.CONFLICT, "Такой логин уже занят")
+                            return
+                        self.send_error_json(HTTPStatus.CONFLICT, "Такая почта уже занята")
+                        return
                     user = db.execute(
                         """
-                        insert into users (username, password_hash, created_at)
-                        values (%s, %s, %s)
-                        on conflict(username) do nothing
+                        insert into users (username, email, password_hash, created_at)
+                        values (%s, %s, %s, %s)
                         returning *
                         """,
-                        (username, hash_password(password), now_ts()),
+                        (username, email, hash_password(password), now_ts()),
                     ).fetchone()
-                    if not user:
-                        self.send_error_json(HTTPStatus.CONFLICT, "Такой логин уже занят")
-                        return
                     save_progress(db, user["id"], empty_progress_state())
                     token = self.create_session(db, user["id"])
                     self.send_json(HTTPStatus.OK, {"ok": True, "token": token, "user": public_user(user), "progress": get_progress(db, user["id"]), "leaderboard": leaderboard(db)}, token=token)
@@ -373,9 +427,14 @@ class MLingoHandler(SimpleHTTPRequestHandler):
 
                 if path == "/api/login" and method == "POST":
                     payload = read_json(self)
-                    username = normalize_username(str(payload.get("username", "")))
+                    identity = str(payload.get("username", "")).strip()
                     password = str(payload.get("password", ""))
-                    user = db.execute("select * from users where username = %s", (username,)).fetchone()
+                    if "@" in identity:
+                        email = normalize_email(identity)
+                        user = db.execute("select * from users where lower(email) = lower(%s)", (email,)).fetchone()
+                    else:
+                        username = normalize_username(identity)
+                        user = db.execute("select * from users where username = %s", (username,)).fetchone()
                     if not user or not verify_password(password, user["password_hash"]):
                         self.send_error_json(HTTPStatus.UNAUTHORIZED, "Неверный логин или пароль")
                         return

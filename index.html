@@ -11,10 +11,10 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=9" />
-    <script defer src="./app.js?v=9"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean5" />
+    <script defer src="./app.js?v=clean5"></script>
   </head>
-  <body data-layout="course">
+  <body>
     <div class="app-shell" id="top">
       <header class="topbar">
         <a class="brand" href="#top" aria-label="Домой">
@@ -25,7 +25,6 @@
           </span>
         </a>
         <div class="top-actions">
-          <button class="ghost-button" id="layoutModeButton" type="button">Макет: курс</button>
           <button class="ghost-button" id="focusModeButton" type="button">Режим фокуса</button>
           <button class="ghost-button" id="accountButton" type="button">Войти</button>
           <button class="primary-button" id="dailyButton" type="button">Сегодня</button>
@@ -227,6 +226,12 @@
             <label>
               <span>Логин</span>
               <input id="authUsername" autocomplete="username" placeholder="например: lambda" />
+              <small class="auth-hint" id="authUsernameHint">3-24 символа: буквы, цифры, _-.</small>
+            </label>
+            <label>
+              <span>Почта</span>
+              <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" />
+              <small class="auth-hint" id="authEmailHint">Нужна при создании аккаунта. Войти можно по логину или почте.</small>
             </label>
             <label>
               <span>Пароль</span>

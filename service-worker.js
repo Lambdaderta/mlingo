@@ -1,4 +1,4 @@
-const CACHE_NAME = "mlingo-antivibe-v9";
+const CACHE_NAME = "mlingo-clean-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,8 +23,24 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const accept = event.request.headers.get("accept") || "";
+  const isHtml = event.request.mode === "navigate" || accept.includes("text/html");
+  if (isHtml) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          if (response.ok && new URL(event.request.url).origin === self.location.origin) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || caches.match("./"))),
+    );
+    return;
+  }
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+    caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
         const copy = response.clone();
