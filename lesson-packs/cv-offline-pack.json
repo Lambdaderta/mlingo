@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 1,
+  "id": "cv-offline-pack-v1",
+  "title": "CV Offline Expansion",
+  "description": "Segmentation, classification, CV pipelines and idea tasks for MLingo.",
+  "topics": [
+    {
+      "id": "cv-supervised-pipelines",
+      "title": "CV: supervised пайплайны",
+      "track": "Segmentation / Classification",
+      "tag": "cv",
+      "icon": "CP",
+      "color": "#b8a16d",
+      "copy": "Практика пайплайнов: small-data segmentation, classification, validation, threshold, postprocess.",
+      "rules": [
+        "Backbone можно заморозить, маленькую голову обучать",
+        "Валидация должна повторять leaderboard pipeline",
+        "Для маленьких данных уменьшаем число обучаемых параметров"
+      ],
+      "lessons": [
+        {
+          "id": "cv-pipe-soft-patch-target",
+          "kind": "write",
+          "title": "Soft patch target",
+          "prompt": "Напиши получение soft target 14x14 из бинарной mask 224x224: каждый patch target равен доле foreground.",
+          "starter": "def make_patch_target(mask):",
+          "answer": "def make_patch_target(mask):\n    mask = torch.from_numpy(mask.astype('float32'))[None, None]\n    target = torch.nn.functional.avg_pool2d(mask, kernel_size=16, stride=16)\n    return target[0]",
+          "testsText": "Проверяется shape [1,14,14] и среднее по каждому 16x16 patch.",
+          "hint": "Для границы объекта лучше soft target, а не грубый 0/1 patch label.",
+          "explain": "Dense mask дает много supervision points даже при малом числе картинок.",
+          "difficulty": 3,
+          "terms": ["mask"]
+        },
+        {
+          "id": "cv-pipe-frozen-head-choice",
+          "kind": "choice",
+          "title": "20 masks strategy",
+          "prompt": "Что безопаснее всего обучать, если есть только 20 размеченных segmentation images и сильные frozen features?",
+          "options": ["маленькую segmentation head", "весь vision backbone с нуля", "большой cross-attention decoder", "threshold на test labels"],
+          "answer": "маленькую segmentation head",
+          "hint": "Мало данных означает: меньше обучаемых параметров, сильнее опора на готовые признаки.",
+          "explain": "Frozen features снижают variance, а маленькая head учит только границу foreground/background.",
+          "difficulty": 1
+        },
+        {
+          "id": "cv-pipe-patch-features-reshape",
+          "kind": "write",
+          "title": "Patch features -> grid",
+          "prompt": "Напиши reshape patch features `[B,196,768]` в tensor `[B,768,14,14]` для Conv2d head.",
+          "starter": "def patches_to_grid(patch_features):",
+          "answer": "def patches_to_grid(patch_features):\n    b = patch_features.size(0)\n    x = patch_features.reshape(b, 14, 14, 768)\n    return x.permute(0, 3, 1, 2).contiguous()",
+          "testsText": "Проверяется BCHW layout и сохранение batch dimension.",
+          "hint": "Сначала [B,14,14,C], потом channels-first.",
+          "explain": "Conv2d работает с `[B,C,H,W]`, а ViT tokens приходят последовательностью.",
+          "difficulty": 3,
+          "terms": ["conv2d"]
+        },
+        {
+          "id": "cv-pipe-small-seg-head",
+          "kind": "write",
+          "title": "Small SegHead",
+          "prompt": "Напиши `forward` маленькой segmentation head: patch features -> grid -> conv net -> logits 14x14.",
+          "starter": "def forward(self, patch_features):",
+          "answer": "def forward(self, patch_features):\n    b = patch_features.size(0)\n    x = patch_features.reshape(b, 14, 14, 768)\n    x = x.permute(0, 3, 1, 2).contiguous()\n    return self.net(x)",
+          "testsText": "Проверяется output [B,1,14,14].",
+          "hint": "Head возвращает logits, sigmoid будет в loss/metric.",
+          "explain": "Это минимальная supervised голова поверх patch embeddings.",
+          "difficulty": 4,
+          "strictLines": true,
+          "terms": ["logits", "conv2d"]
+        },
+        {
+          "id": "cv-pipe-bce-dice-weights",
+          "kind": "write",
+          "title": "BCE + Dice weights",
+          "prompt": "Напиши loss: `0.5 * BCEWithLogits + DiceLoss` для binary segmentation logits/target.",
+          "starter": "def seg_loss(logits, target):",
+          "answer": "def seg_loss(logits, target):\n    bce = torch.nn.functional.binary_cross_entropy_with_logits(logits, target)\n    prob = torch.sigmoid(logits)\n    inter = (prob * target).sum(dim=(1, 2, 3))\n    denom = prob.sum(dim=(1, 2, 3)) + target.sum(dim=(1, 2, 3))\n    dice = 1 - ((2 * inter + 1e-6) / (denom + 1e-6)).mean()\n    return 0.5 * bce + dice",
+          "testsText": "Проверяется sigmoid только для Dice и BCE по logits.",
+          "hint": "BCEWithLogits получает сырые logits, Dice работает с probabilities.",
+          "explain": "Комбо стабилизирует обучение на foreground/background дисбалансе.",
+          "difficulty": 4,
+          "strictLines": true,
+          "terms": ["bce", "dice", "logits"]
+        },
+        {
+          "id": "cv-pipe-full-val-iou",
+          "kind": "order",
+          "title": "Full validation pipeline",
+          "prompt": "Собери честную валидацию segmentation head.",
+          "blocks": [
+            "logits = head(patch_features)",
+            "prob14 = torch.sigmoid(logits)[0, 0].cpu().numpy()",
+            "soft = restore_mask_to_original(prob14, meta)",
+            "pred = (soft >= threshold).astype(np.uint8)",
+            "score = binaryMaskIOU(pred, gt_mask)"
+          ],
+          "answer": [
+            "logits = head(patch_features)",
+            "prob14 = torch.sigmoid(logits)[0, 0].cpu().numpy()",
+            "soft = restore_mask_to_original(prob14, meta)",
+            "pred = (soft >= threshold).astype(np.uint8)",
+            "score = binaryMaskIOU(pred, gt_mask)"
+          ],
+          "hint": "Validation должна повторять весь путь до leaderboard mask.",
+          "explain": "Patch loss может выглядеть хорошо, но leaderboard оценивает restored binary mask.",
+          "difficulty": 3,
+          "terms": ["threshold", "iou"]
+        },
+        {
+          "id": "cv-pipe-threshold-oof",
+          "kind": "write",
+          "title": "Threshold sweep OOF",
+          "prompt": "Напиши подбор threshold по validation soft masks и gt masks.",
+          "starter": "def best_threshold(soft_masks, gt_masks):",
+          "answer": "def best_threshold(soft_masks, gt_masks):\n    best_t, best_score = 0.5, -1.0\n    for t in np.linspace(0.05, 0.95, 19):\n        scores = []\n        for soft, gt in zip(soft_masks, gt_masks):\n            pred = (soft >= t).astype(np.uint8)\n            scores.append(binaryMaskIOU(pred, gt))\n        score = float(np.mean(scores))\n        if score > best_score:\n            best_t, best_score = float(t), score\n    return best_t, best_score",
+          "testsText": "Проверяется максимум IoU и отсутствие test labels.",
+          "hint": "Порог является гиперпараметром, его выбирают на validation.",
+          "explain": "Threshold sweep часто дает больше, чем ещё одна эпоха обучения.",
+          "difficulty": 3,
+          "terms": ["threshold", "iou"]
+        },
+        {
+          "id": "cv-pipe-lcc-decision",
+          "kind": "choice",
+          "title": "Largest component когда?",
+          "prompt": "Когда `keep_largest_component` наиболее вероятно помогает segmentation submission?",
+          "options": ["когда обычно один объект и есть мелкий шум", "когда объектов много и все важны", "когда маска multiclass", "когда target encoding течёт"],
+          "answer": "когда обычно один объект и есть мелкий шум",
+          "hint": "Largest component удаляет все foreground-островки кроме самого большого.",
+          "explain": "Если в разметке может быть несколько животных, LCC может ухудшить score.",
+          "difficulty": 2,
+          "terms": ["connected_components"]
+        },
+        {
+          "id": "cv-cls-class-map-write",
+          "kind": "write",
+          "title": "Class map",
+          "prompt": "Напиши mapping class_name -> class_id и добавь колонку `label` в DataFrame.",
+          "starter": "classes = sorted(df['class_name'].unique())",
+          "answer": "classes = sorted(df['class_name'].unique())\nclass_to_id = {name: idx for idx, name in enumerate(classes)}\ndf['label'] = df['class_name'].map(class_to_id).astype('int64')",
+          "testsText": "Проверяется стабильный sorted mapping и int64 labels.",
+          "hint": "Для CrossEntropy target должен быть class id, а не строка.",
+          "explain": "Стабильный mapping нужен, чтобы train/test/submission одинаково понимали классы.",
+          "difficulty": 2,
+          "terms": ["cross_entropy", "dtype"]
+        },
+        {
+          "id": "cv-cls-stratified-split",
+          "kind": "write",
+          "title": "Stratified CV split",
+          "prompt": "Напиши train/valid split для классификации картинок с сохранением долей классов.",
+          "starter": "from sklearn.model_selection import train_test_split",
+          "answer": "from sklearn.model_selection import train_test_split\n\ntrain_df, valid_df = train_test_split(\n    df,\n    test_size=0.2,\n    random_state=42,\n    stratify=df['label'],\n)",
+          "testsText": "Проверяется `stratify=df['label']`.",
+          "hint": "Random split без stratify может потерять редкие классы в valid.",
+          "explain": "Для классификации baseline без честного class balance может сильно врать.",
+          "difficulty": 2
+        },
+        {
+          "id": "cv-cls-ce-forward",
+          "kind": "order",
+          "title": "Classification step",
+          "prompt": "Собери train step для multiclass image classification.",
+          "blocks": [
+            "x = x.to(device)",
+            "y = y.to(device).long()",
+            "optimizer.zero_grad()",
+            "logits = model(x)",
+            "loss = torch.nn.functional.cross_entropy(logits, y)",
+            "loss.backward()",
+            "optimizer.step()"
+          ],
+          "answer": [
+            "x = x.to(device)",
+            "y = y.to(device).long()",
+            "optimizer.zero_grad()",
+            "logits = model(x)",
+            "loss = torch.nn.functional.cross_entropy(logits, y)",
+            "loss.backward()",
+            "optimizer.step()"
+          ],
+          "answers": [
+            [
+              "x = x.to(device)",
+              "y = y.to(device).long()",
+              "optimizer.zero_grad()",
+              "logits = model(x)",
+              "loss = torch.nn.functional.cross_entropy(logits, y)",
+              "loss.backward()",
+              "optimizer.step()"
+            ],
+            [
+              "y = y.to(device).long()",
+              "x = x.to(device)",
+              "optimizer.zero_grad()",
+              "logits = model(x)",
+              "loss = torch.nn.functional.cross_entropy(logits, y)",
+              "loss.backward()",
+              "optimizer.step()"
+            ]
+          ],
+          "hint": "x/y можно переносить в любом порядке, но оба должны быть на device до loss.",
+          "explain": "CrossEntropy получает logits и long labels.",
+          "difficulty": 3,
+          "terms": ["cross_entropy", "device", "logits"]
+        },
+        {
+          "id": "cv-cls-macro-f1-valid",
+          "kind": "write",
+          "title": "Macro F1 valid",
+          "prompt": "Напиши сбор predictions на validation и подсчет macro F1.",
+          "starter": "preds, targets = [], []",
+          "answer": "preds, targets = [], []\nmodel.eval()\nwith torch.no_grad():\n    for x, y in valid_loader:\n        x = x.to(device)\n        logits = model(x)\n        preds.extend(logits.argmax(dim=1).cpu().numpy())\n        targets.extend(y.numpy())\nscore = f1_score(targets, preds, average='macro')",
+          "testsText": "Проверяется eval/no_grad, argmax и average='macro'.",
+          "hint": "Macro F1 усредняет классы поровну, поэтому редкие классы важны.",
+          "explain": "Для breed classification accuracy может скрывать провал редких классов.",
+          "difficulty": 4,
+          "terms": ["f1"]
+        }
+      ]
+    },
+    {
+      "id": "cv-idea-lab",
+      "title": "CV: идейные задачи",
+      "track": "Contest decisions",
+      "tag": "cv",
+      "icon": "ID",
+      "color": "#8b9bb4",
+      "copy": "Свободные ответы: план эксперимента, ранжирование идей, риски leakage и быстрые проверки.",
+      "rules": [
+        "Пиши план: validation -> baseline -> experiment -> risk",
+        "Не перечисляй buzzwords, объясняй почему идея должна сработать",
+        "Проверка локальная: keywords/rubric, позже можно заменить GPT-review"
+      ],
+      "lessons": [
+        {
+          "id": "idea-cuties-20-masks",
+          "kind": "idea",
+          "title": "20 масок и CLIP",
+          "prompt": "У тебя 20 размеченных masks, zero-shot CLIP даёт baseline. Напиши план, как выбить выше без обучения большой модели с нуля.",
+          "context": "Дано: cats/dogs segmentation, 20 GT masks, CLIP baseline около 0.35. Нельзя ручную разметку test.",
+          "rubric": [
+            {"label": "frozen features", "keywords": ["frozen", "замороз", "feature extractor", "признак"]},
+            {"label": "small head", "keywords": ["head", "голов", "linear", "conv", "маленьк"]},
+            {"label": "soft patch target", "keywords": ["soft", "avg_pool", "patch target", "доля"]},
+            {"label": "validation threshold", "keywords": ["validation", "threshold", "порог", "iou"]},
+            {"label": "postprocess", "keywords": ["largest", "component", "postprocess", "morph", "lcc"]}
+          ],
+          "minRubric": 4,
+          "minWords": 55,
+          "hint": "Не fine-tune весь CLIP первым делом. Уменьши число обучаемых параметров.",
+          "explain": "Идея: CLIP уже дал сильные visual features, а 20 dense masks достаточно для маленькой supervised head.",
+          "reference": "Хороший план: заморозить CLIP vision, взять patch tokens, downsample masks в soft 14x14 targets, обучить маленькую Conv/Linear head через BCE+Dice, валидировать full restore->threshold->IoU, проверить LCC/morphology и только потом думать о fine-tune последнего блока.",
+          "difficulty": 4,
+          "terms": ["mask", "dice", "threshold"]
+        },
+        {
+          "id": "idea-cv-private-gap",
+          "kind": "idea",
+          "title": "Public/private gap",
+          "prompt": "Public score прыгает, private может быть другим. Напиши, как бы ты выбирал финальное CV segmentation решение.",
+          "context": "Есть 20 validation images, несколько submissions: zero-shot, supervised head, head+LCC, head+threshold, ensemble.",
+          "rubric": [
+            {"label": "image-level CV", "keywords": ["fold", "image", "split", "валидац"]},
+            {"label": "OOF threshold", "keywords": ["oof", "threshold", "порог"]},
+            {"label": "ablation", "keywords": ["ablation", "сравн", "отключ"]},
+            {"label": "robustness", "keywords": ["private", "robust", "стабил", "разброс"]},
+            {"label": "submit budget", "keywords": ["submit", "сабмит", "budget", "20"]}
+          ],
+          "minRubric": 4,
+          "minWords": 50,
+          "hint": "Не выбирай по одному красивому public submit. Нужна устойчивость на локальной валидации.",
+          "explain": "Идейная задача тренирует contest decision-making, а не синтаксис.",
+          "reference": "Хороший ответ: использовать image-level folds, сравнить ablations head/LCC/morph/threshold, выбирать threshold по OOF, смотреть разброс по folds и не тратить submissions на случайные варианты без локального выигрыша.",
+          "difficulty": 4
+        },
+        {
+          "id": "idea-chicken-counting",
+          "kind": "idea",
+          "title": "Chicken counting",
+          "prompt": "Нужно считать животных на изображении, bbox нет или они слабые. Напиши 2-3 разумных подхода и как валидировать.",
+          "context": "Метрика похожа на MAE по количеству. Есть картинки и count labels.",
+          "rubric": [
+            {"label": "density/count", "keywords": ["density", "плотност", "sum", "сумм"]},
+            {"label": "classification/regression", "keywords": ["regression", "регресс", "count", "mae"]},
+            {"label": "peaks/components", "keywords": ["peak", "component", "connected", "local maxima"]},
+            {"label": "MAE validation", "keywords": ["mae", "validation", "valid"]},
+            {"label": "augmentation", "keywords": ["augment", "crop", "flip", "resize"]}
+          ],
+          "minRubric": 3,
+          "minWords": 45,
+          "hint": "Если leaderboard про count, validation тоже должна считать ошибку count.",
+          "explain": "Counting можно решать не только детектором: density map и direct count regression часто проще.",
+          "reference": "Нормальный план: baseline direct regression count, если есть point-like labels - density map с суммой как count, postprocess peaks/components для heatmap, метрика MAE на holdout и быстрые augmentations.",
+          "difficulty": 3,
+          "terms": ["density_map"]
+        },
+        {
+          "id": "idea-radar-multichannel",
+          "kind": "idea",
+          "title": "Radar multi-channel",
+          "prompt": "У image не 3 RGB канала, а 4-8 radar channels. Напиши план CV pipeline без слепого копирования RGB baseline.",
+          "context": "Дано: tensor HxWxC, C != 3. Нужно segmentation/classification.",
+          "rubric": [
+            {"label": "input channels", "keywords": ["in_channels", "канал", "conv2d"]},
+            {"label": "normalization", "keywords": ["normalize", "mean", "std", "нормал"]},
+            {"label": "validation", "keywords": ["validation", "split", "valid"]},
+            {"label": "augment caution", "keywords": ["augment", "flip", "spatial", "аугмент"]},
+            {"label": "baseline simple", "keywords": ["baseline", "simple", "маленьк", "cnn"]}
+          ],
+          "minRubric": 4,
+          "minWords": 50,
+          "hint": "Первый слой модели должен принимать C каналов, а mean/std считаются по каждому каналу.",
+          "explain": "Radar/medical/multispectral CV часто ломается на RGB-интуициях.",
+          "reference": "Хороший план: проверить shape, задать Conv2d(in_channels=C), нормализовать каждый канал train statistics, использовать spatial augmentations синхронно с mask, валидировать по scenes/time/groups и начать с маленькой CNN/U-Net.",
+          "difficulty": 3,
+          "terms": ["conv2d", "broadcasting"]
+        },
+        {
+          "id": "idea-classification-imbalance",
+          "kind": "idea",
+          "title": "Редкие классы",
+          "prompt": "В image classification 37 пород, классы несбалансированы. Напиши план, чтобы macro F1 не умер.",
+          "context": "Дано: train images, labels, leaderboard metric macro F1.",
+          "rubric": [
+            {"label": "stratified split", "keywords": ["stratify", "stratified", "split"]},
+            {"label": "macro metric", "keywords": ["macro", "f1"]},
+            {"label": "class weights/sampler", "keywords": ["weight", "sampler", "balance", "class"]},
+            {"label": "confusion analysis", "keywords": ["confusion", "ошиб", "matrix"]},
+            {"label": "augmentation", "keywords": ["augment", "crop", "flip"]}
+          ],
+          "minRubric": 4,
+          "minWords": 45,
+          "hint": "Accuracy может быть красивой, пока редкие классы провалены.",
+          "explain": "Macro F1 заставляет относиться к редким классам как к важным.",
+          "reference": "Хороший план: stratified validation, metric macro F1, class weights или balanced sampler, confusion matrix по классам, аккуратные augmentations и per-class error analysis.",
+          "difficulty": 3,
+          "terms": ["f1"]
+        },
+        {
+          "id": "idea-last-30-min-cv",
+          "kind": "idea",
+          "title": "Последние 30 минут",
+          "prompt": "До конца CV-контеста 30 минут. Есть работающий baseline. Какие действия дадут максимум шанса на прирост без слома?",
+          "context": "Можно сделать 1-2 сабмита, времени на новую архитектуру нет.",
+          "rubric": [
+            {"label": "save current submit", "keywords": ["submit", "сабмит", "baseline"]},
+            {"label": "threshold/postprocess", "keywords": ["threshold", "порог", "postprocess", "component"]},
+            {"label": "TTA/ensemble", "keywords": ["tta", "ensemble", "flip", "усред"]},
+            {"label": "validation check", "keywords": ["validation", "valid", "локальн"]},
+            {"label": "avoid risky refactor", "keywords": ["risk", "риск", "не перепис", "не менять"]}
+          ],
+          "minRubric": 4,
+          "minWords": 45,
+          "hint": "Последние минуты не для новой большой модели.",
+          "explain": "Контест выигрывается ранжированием идей по риску/выигрышу.",
+          "reference": "Хороший план: зафиксировать текущий лучший submit, сделать threshold/postprocess sweep, попробовать TTA flip/average или простой ensemble, проверить локально и не переписывать pipeline без времени на валидацию.",
+          "difficulty": 2
+        }
+      ]
+    }
+  ]
+}

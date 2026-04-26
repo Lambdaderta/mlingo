@@ -1,0 +1,9 @@
+{
+  "appId": "io.mlingo.app",
+  "appName": "MLingo",
+  "webDir": "web",
+  "server": {
+    "androidScheme": "https"
+  },
+  "includePlugins": []
+}

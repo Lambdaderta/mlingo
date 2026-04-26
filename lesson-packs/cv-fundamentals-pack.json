@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "id": "cv-fundamentals-pack-v1",
+  "title": "CV Fundamentals Expansion",
+  "description": "Low-level image IO, masks, boxes, transforms, segmentation loops and small architectures.",
+  "topics": [
+    {
+      "id": "cv-image-mask-basics",
+      "title": "CV: изображения и маски",
+      "track": "Image IO / Masks / Boxes",
+      "tag": "cv",
+      "icon": "IM",
+      "color": "#c8b36f",
+      "copy": "Ручная база: PIL/cv2, RGB/BGR, HWC/CHW, бинарные маски, bbox и IoU.",
+      "rules": [
+        "Всегда явно держи layout: HWC numpy или CHW tensor",
+        "Маска и изображение должны получать одинаковые геометрические transforms",
+        "Формат bbox лучше выбрать один раз и не мешать inclusive/exclusive"
+      ],
+      "lessons": [
+        {
+          "id": "cv-pil-open-rgb-array",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "PIL RGB array",
+          "prompt": "Что получится после `np.array(Image.open(path).convert('RGB'))`?",
+          "options": ["HxWx3 RGB uint8", "3xHxW float", "HxWx3 BGR uint8", "HxW long"],
+          "answer": "HxWx3 RGB uint8",
+          "hint": "PIL хранит RGB, numpy оставляет channels-last.",
+          "explain": "PIL не делает CHW tensor сам. После чтения это HWC RGB array, и для torch обычно нужен `permute(2,0,1)`.",
+          "terms": ["image_tensor"]
+        },
+        {
+          "id": "cv2-imread-none-guard",
+          "kind": "fix",
+          "difficulty": 2,
+          "title": "cv2.imread guard",
+          "prompt": "Исправь чтение OpenCV: если путь битый, `cv2.cvtColor` не должен падать непонятной ошибкой.",
+          "code": "img = cv2.imread(path)\nimg = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)\nimg = img.astype(np.float32) / 255.0",
+          "answer": "img = cv2.imread(path)\nif img is None:\n    raise FileNotFoundError(path)\nimg = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)\nimg = img.astype(np.float32) / 255.0",
+          "hint": "`cv2.imread` возвращает None, если файл не прочитан.",
+          "explain": "Явная проверка пути экономит время: ошибка будет про файл, а не про пустой image в `cvtColor`.",
+          "strictLines": true
+        },
+        {
+          "id": "cv-nhwc-to-nchw-batch",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "NHWC batch -> NCHW",
+          "prompt": "Напиши `batch_to_tensor(images)`: numpy batch NHWC uint8 перевести в torch tensor NCHW float в [0,1].",
+          "starter": "def batch_to_tensor(images):",
+          "answer": "def batch_to_tensor(images):\n    return torch.from_numpy(images).permute(0, 3, 1, 2).float() / 255.0",
+          "testsText": "Проверяется shape B,C,H,W, dtype float и диапазон [0,1].",
+          "hint": "Для batch добавляется ось 0, поэтому порядок `0,3,1,2`.",
+          "explain": "Это частый мост между cv2/numpy preprocessing и PyTorch моделью.",
+          "terms": ["image_tensor", "dtype"]
+        },
+        {
+          "id": "cv-gray-to-binary-mask",
+          "kind": "fill",
+          "difficulty": 1,
+          "title": "Gray -> binary mask",
+          "prompt": "Заполни threshold для бинарной маски из grayscale PNG.",
+          "code": "mask = np.array(Image.open(path).convert('L'))\nmask = (mask > ____).astype(np.uint8)",
+          "blanks": ["0"],
+          "hint": "Любой ненулевой пиксель считаем foreground.",
+          "explain": "Так аккуратно превращают 0/255 или 0/1 grayscale mask в бинарную 0/1 маску.",
+          "terms": ["mask"]
+        },
+        {
+          "id": "cv-mask-bbox-exclusive",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "bbox exclusive",
+          "prompt": "Напиши `mask_to_bbox_exclusive(mask)`: вернуть `[x1,y1,x2,y2]`, где x2/y2 exclusive, или None для пустой маски.",
+          "starter": "def mask_to_bbox_exclusive(mask):",
+          "answer": "def mask_to_bbox_exclusive(mask):\n    ys, xs = np.where(mask > 0)\n    if len(xs) == 0:\n        return None\n    return [xs.min(), ys.min(), xs.max() + 1, ys.max() + 1]",
+          "testsText": "Проверяется пустая маска и что правый/нижний край exclusive.",
+          "hint": "В numpy slice правый край не включается.",
+          "explain": "Это не повтор inclusive bbox: формат удобен для `img[y1:y2, x1:x2]` без `+1` в месте crop.",
+          "terms": ["bbox"]
+        },
+        {
+          "id": "cv-box-iou-numpy",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "box_iou numpy",
+          "prompt": "Напиши `box_iou(a, b)` для bbox `[x1,y1,x2,y2]` в exclusive формате.",
+          "starter": "def box_iou(a, b, eps=1e-7):",
+          "answer": "def box_iou(a, b, eps=1e-7):\n    x1 = max(a[0], b[0])\n    y1 = max(a[1], b[1])\n    x2 = min(a[2], b[2])\n    y2 = min(a[3], b[3])\n    inter = max(0, x2 - x1) * max(0, y2 - y1)\n    area_a = max(0, a[2] - a[0]) * max(0, a[3] - a[1])\n    area_b = max(0, b[2] - b[0]) * max(0, b[3] - b[1])\n    return inter / (area_a + area_b - inter + eps)",
+          "testsText": "Проверяется нет пересечения, полное совпадение и частичное пересечение.",
+          "hint": "Union = area_a + area_b - inter.",
+          "explain": "Это IoU для bbox, а не для mask, поэтому отдельно закрепляет формат координат.",
+          "terms": ["iou", "bbox"]
+        },
+        {
+          "id": "cv-sync-random-crop-pair",
+          "kind": "order",
+          "difficulty": 4,
+          "title": "RandomCrop image+mask",
+          "prompt": "Собери синхронный RandomCrop через torchvision functional API.",
+          "blocks": [
+            "i, j, h, w = torchvision.transforms.RandomCrop.get_params(img, output_size=(256, 256))",
+            "img = TF.crop(img, i, j, h, w)",
+            "mask = TF.crop(mask, i, j, h, w)"
+          ],
+          "answer": [
+            "i, j, h, w = torchvision.transforms.RandomCrop.get_params(img, output_size=(256, 256))",
+            "img = TF.crop(img, i, j, h, w)",
+            "mask = TF.crop(mask, i, j, h, w)"
+          ],
+          "hint": "Параметры crop должны быть одни и те же.",
+          "explain": "Это torchvision transforms без рассинхронизации маски и изображения.",
+          "terms": ["augmentation", "mask"]
+        }
+      ]
+    },
+    {
+      "id": "cv-segmentation-loops",
+      "title": "CV: segmentation loops",
+      "track": "Loss / Metrics / Validation",
+      "tag": "cv",
+      "icon": "SG",
+      "color": "#d6be76",
+      "copy": "То, что реально роляет в segmentation: BCEWithLogits, Dice, IoU, threshold и честный validation.",
+      "rules": [
+        "Loss получает logits, метрика обычно получает thresholded probabilities",
+        "Validation пишется без graph и повторяет submission pipeline",
+        "Средние по batch нужно считать с учетом размера batch"
+      ],
+      "lessons": [
+        {
+          "id": "seg-batched-dice-per-image",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Batched Dice",
+          "prompt": "Напиши `batched_dice(pred, target)`: pred/target Bx1xHxW bool или 0/1, вернуть mean Dice по изображениям.",
+          "starter": "def batched_dice(pred, target, eps=1e-6):",
+          "answer": "def batched_dice(pred, target, eps=1e-6):\n    pred = pred.float()\n    target = target.float()\n    inter = (pred * target).sum(dim=(1, 2, 3))\n    denom = pred.sum(dim=(1, 2, 3)) + target.sum(dim=(1, 2, 3))\n    dice = (2 * inter + eps) / (denom + eps)\n    return dice.mean().item()",
+          "testsText": "Проверяется batch size > 1 и усреднение по images, а не общий Dice по всем пикселям.",
+          "hint": "Суммируй по C,H,W, но не по B.",
+          "explain": "Так validation ближе к leaderboard, где часто считают среднее качество по картинкам.",
+          "terms": ["dice"]
+        },
+        {
+          "id": "seg-mask-iou-per-image",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Mask IoU",
+          "prompt": "Напиши IoU для двух бинарных масок numpy одинакового размера.",
+          "starter": "def mask_iou(pred, target, eps=1e-7):",
+          "answer": "def mask_iou(pred, target, eps=1e-7):\n    pred = pred.astype(bool)\n    target = target.astype(bool)\n    inter = np.logical_and(pred, target).sum()\n    union = np.logical_or(pred, target).sum()\n    return float(inter / (union + eps))",
+          "testsText": "Проверяется полное совпадение, пустое пересечение и bool conversion.",
+          "hint": "Для mask IoU union считается по пикселям.",
+          "explain": "Это основной sanity-check для segmentation submission.",
+          "terms": ["iou", "mask"]
+        },
+        {
+          "id": "seg-train-one-epoch",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "train_one_epoch seg",
+          "prompt": "Напиши `train_one_epoch` для binary segmentation: device, train mode, BCEWithLogits, backward, step.",
+          "starter": "def train_one_epoch(model, loader, optimizer, device):",
+          "answer": "def train_one_epoch(model, loader, optimizer, device):\n    model.train()\n    total = 0.0\n    for x, y in loader:\n        x = x.to(device)\n        y = y.to(device).float()\n        optimizer.zero_grad()\n        logits = model(x)\n        loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y)\n        loss.backward()\n        optimizer.step()\n        total += loss.item() * x.size(0)\n    return total / len(loader.dataset)",
+          "testsText": "Проверяется train mode, device, logits без sigmoid в loss и weighted average по batch size.",
+          "hint": "Loss усреднен по batch, поэтому для epoch mean умножай на `x.size(0)`.",
+          "explain": "Это полноценный минимальный train loop для segmentation без pretrained моделей.",
+          "strictLines": true,
+          "terms": ["bce", "logits"]
+        },
+        {
+          "id": "seg-val-iou-weighted",
+          "kind": "fix",
+          "difficulty": 5,
+          "title": "Val IoU weighted",
+          "prompt": "Исправь validation: нужен eval/no_grad, device, sigmoid, threshold и среднее по числу изображений.",
+          "code": "def validate(model, loader):\n    scores = []\n    for x, y in loader:\n        pred = model(x) > 0.5\n        scores.append(binary_iou(pred, y))\n    return sum(scores) / len(scores)",
+          "answer": "def validate(model, loader):\n    model.eval()\n    scores = []\n    with torch.no_grad():\n        for x, y in loader:\n            x = x.to(device)\n            prob = torch.sigmoid(model(x)).cpu()\n            pred = prob > 0.5\n            scores.extend([binary_iou(p, t > 0.5) for p, t in zip(pred, y)])\n    return sum(scores) / len(scores)",
+          "hint": "Список scores должен получать score каждого image.",
+          "explain": "Такой loop не строит graph, не threshold-ит logits и не смешивает batch-и в одну маску.",
+          "strictLines": true,
+          "terms": ["validation", "threshold", "iou"]
+        },
+        {
+          "id": "seg-empty-mask-metric-choice",
+          "kind": "choice",
+          "difficulty": 3,
+          "title": "Пустая маска",
+          "prompt": "Что чаще всего стоит явно решить перед подсчетом segmentation metric?",
+          "options": ["что делать, если union == 0", "какой цвет у картинки", "как назвать DataFrame", "сколько строк в README"],
+          "answer": "что делать, если union == 0",
+          "hint": "Если pred и target пустые, обычная формула IoU делит на ноль.",
+          "explain": "Для пустых masks нужно выбрать контракт: например score 1.0 при обеих пустых или eps-защита, главное одинаково везде.",
+          "terms": ["iou", "mask"]
+        }
+      ]
+    },
+    {
+      "id": "cv-architectures-from-scratch",
+      "title": "CV: архитектуры с нуля",
+      "track": "CNN / U-Net / Classification",
+      "tag": "cv",
+      "icon": "AR",
+      "color": "#9caec7",
+      "copy": "Маленькие CNN/U-Net блоки без предобучек: shapes, channels, skip connections, logits.",
+      "rules": [
+        "В torch layout BCHW, channels dimension равен 1",
+        "Adaptive pooling убирает ручной расчет flatten size",
+        "Binary segmentation head обычно возвращает Bx1xHxW logits"
+      ],
+      "lessons": [
+        {
+          "id": "arch-conv-block-order",
+          "kind": "order",
+          "difficulty": 1,
+          "title": "Conv block",
+          "prompt": "Собери простой Conv block без pretrained weights.",
+          "blocks": [
+            "nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)",
+            "nn.BatchNorm2d(out_ch)",
+            "nn.ReLU(inplace=True)"
+          ],
+          "answer": [
+            "nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)",
+            "nn.BatchNorm2d(out_ch)",
+            "nn.ReLU(inplace=True)"
+          ],
+          "hint": "Сначала свертка, потом нормализация, потом нелинейность.",
+          "explain": "Это базовый строительный блок маленькой CNN/U-Net, обучаемой с нуля.",
+          "terms": ["conv2d"]
+        },
+        {
+          "id": "arch-simple-cnn-adaptive-pool",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "SimpleCNN forward",
+          "prompt": "Напиши `forward` для CNN: features -> adaptive avg pool 1x1 -> flatten -> classifier.",
+          "starter": "def forward(self, x):",
+          "answer": "def forward(self, x):\n    x = self.features(x)\n    x = torch.nn.functional.adaptive_avg_pool2d(x, 1)\n    x = torch.flatten(x, 1)\n    x = self.classifier(x)\n    return x",
+          "testsText": "Проверяется, что модель принимает разные H,W и сохраняет batch dimension.",
+          "hint": "Adaptive pool убирает зависимость Linear от размера картинки.",
+          "explain": "Это простой CNN baseline без pretrained backbone и без ручного расчета flatten size.",
+          "terms": ["conv2d"]
+        },
+        {
+          "id": "arch-unet-up-concat",
+          "kind": "fix",
+          "difficulty": 4,
+          "title": "U-Net skip concat",
+          "prompt": "Исправь U-Net up block: после upsample нужно склеить decoder feature со skip по channel dimension.",
+          "code": "x = self.up(x)\nx = torch.cat([x, skip], dim=0)\nx = self.conv(x)",
+          "answer": "x = self.up(x)\nx = torch.cat([x, skip], dim=1)\nx = self.conv(x)",
+          "hint": "В torch layout BCHW, каналы имеют dimension 1.",
+          "explain": "Skip connection в U-Net соединяет feature maps по каналам, а не по batch.",
+          "terms": ["conv2d"]
+        },
+        {
+          "id": "arch-unet-output-logits",
+          "kind": "choice",
+          "difficulty": 2,
+          "title": "U-Net logits",
+          "prompt": "Что должен возвращать последний слой binary U-Net перед `BCEWithLogitsLoss`?",
+          "options": ["logits Bx1xHxW", "sigmoid probabilities Bx1xHxW", "argmax mask BxHxW", "RGB image Bx3xHxW"],
+          "answer": "logits Bx1xHxW",
+          "hint": "`BCEWithLogitsLoss` сам содержит sigmoid.",
+          "explain": "Финальная свертка обычно `nn.Conv2d(ch, 1, kernel_size=1)`, без sigmoid в `forward`.",
+          "terms": ["bce", "logits"]
+        }
+      ]
+    }
+  ]
+}

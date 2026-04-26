@@ -660,6 +660,17 @@ textarea:focus-visible {
   padding: 1rem;
 }
 
+.idea-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.idea-context {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 .code-textarea {
   min-height: 15rem;
   resize: vertical;
@@ -669,6 +680,28 @@ textarea:focus-visible {
   line-height: 1.55;
   tab-size: 4;
   white-space: pre;
+}
+
+.idea-textarea {
+  min-height: 18rem;
+  font-family: var(--font);
+  white-space: pre-wrap;
+}
+
+.idea-rubric {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.idea-rubric span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #222;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .tests-text {
@@ -790,6 +823,60 @@ textarea:focus-visible {
 .library-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 1rem;
+}
+
+.pack-tools {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 1rem;
+}
+
+.pack-tools h3,
+.pack-tools p {
+  margin: 0.25rem 0 0;
+}
+
+.pack-tools p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.pack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pack-source {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pack-source span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pack-source input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #181818;
+  color: var(--ink);
+  padding: 0.72rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.pack-status {
+  margin-top: 0;
 }
 
 .daily-card > div,

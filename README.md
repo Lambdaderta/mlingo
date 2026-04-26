@@ -113,8 +113,11 @@ python3 server.py --port 4180
 ## Проверки
 
 ```bash
-node --check app.js
-PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
-docker compose config
-python3 scripts/audit_lessons.py
+npm test
+npm run check
+npm run android:debug
+npm run android:test
 ```
+
+`npm test` проверяет синтаксис frontend, схему JSON-паков, allowed-библиотеки и базовые PWA-контракты.  
+`npm run check` дополнительно собирает Capacitor web bundle и прогоняет smoke-тест локального сайта.

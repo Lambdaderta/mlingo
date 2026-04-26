@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "mlingo-pack-index",
+  "title": "MLingo lesson packs",
+  "packs": [
+      {
+        "id": "cv-offline-pack-v1",
+        "title": "CV Offline Expansion",
+        "url": "./cv-offline-pack.json"
+      },
+      {
+        "id": "cv-fundamentals-pack-v1",
+        "title": "CV Fundamentals Expansion",
+        "url": "./cv-fundamentals-pack.json"
+      },
+      {
+        "id": "recsys-rerank-pack-v1",
+        "title": "RecSys and Rerankers Expansion",
+        "url": "./recsys-rerank-pack.json"
+      }
+    ]
+  }

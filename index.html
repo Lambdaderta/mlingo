@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean6" />
-    <script defer src="./app.js?v=clean6"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean8" />
+    <script defer src="./app.js?v=clean8"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -168,6 +168,24 @@
                 </div>
               </div>
               <div class="library-grid" id="libraryGrid"></div>
+              <section class="pack-tools">
+                <div>
+                  <span class="eyebrow">Паки заданий</span>
+                  <h3>Оффлайн-банк можно обновлять отдельно</h3>
+                  <p>Держи задания в GitHub: приложение скачает index/pack JSON, сохранит локально и потом будет работать без сети.</p>
+                </div>
+                <label class="pack-source">
+                  <span>GitHub raw index URL</span>
+                  <input id="packSourceInput" value="https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                </label>
+                <div class="pack-actions">
+                  <button class="primary-button" id="packSyncButton" type="button">Синк из GitHub</button>
+                  <button class="ghost-button" id="packExportButton" type="button">Экспорт банка</button>
+                  <button class="ghost-button" id="packImportButton" type="button">Импорт pack JSON</button>
+                  <input id="packImportInput" type="file" accept="application/json,.json" hidden />
+                </div>
+                <div class="feedback pack-status" id="packStatus" hidden></div>
+              </section>
             </article>
           </section>
         </section>

@@ -1,5 +1,16 @@
 const STORAGE_KEY = "mlingo.antivibe.progress.v6";
 const AUTH_TOKEN_KEY = "mlingo.auth.token";
+const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
+const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
+const LOCAL_USERS_KEY = "mlingo.local.users.v1";
+const LOCAL_CURRENT_USER_KEY = "mlingo.local.current_user.v1";
+const LOCAL_PROGRESS_PREFIX = "mlingo.local.progress.";
+const DEFAULT_PACK_URLS = [
+  "./lesson-packs/cv-offline-pack.json",
+  "./lesson-packs/cv-fundamentals-pack.json",
+  "./lesson-packs/recsys-rerank-pack.json",
+];
+const DEFAULT_PACK_INDEX_URL = "https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json";
 const API_BASE = window.MLINGO_API_BASE || "";
 
 const topics = [
@@ -3152,6 +3163,7 @@ const lessonLabels = {
   bug: "Найди баг",
   fix: "Исправь код",
   write: "Напиши код",
+  idea: "Разбор идеи",
 };
 
 const glossary = [
@@ -3360,22 +3372,21 @@ let selectedOption = null;
 let selectedBugLine = null;
 let activeBlockOrder = [];
 let typedCode = "";
+let lastIdeaEvaluation = null;
 let els = {};
 let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
 let authCheckTimer = null;
 
-if (!topics.some((topic) => topic.id === currentTopicId)) {
-  currentTopicId = topics[0].id;
-  currentLessonIndex = 0;
-}
-
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
   bindEvents();
-  renderAll();
-  bootstrapAccount();
+  loadLessonPacks().then(() => {
+    ensureValidTopicSelection();
+    renderAll();
+    bootstrapAccount();
+  });
   registerServiceWorker();
 });
 
@@ -3432,6 +3443,12 @@ function cacheElements() {
     "logoutButton",
     "authStatus",
     "leaderboardList",
+    "packExportButton",
+    "packImportButton",
+    "packImportInput",
+    "packSyncButton",
+    "packSourceInput",
+    "packStatus",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -3471,6 +3488,14 @@ function bindEvents() {
   els.logoutButton?.addEventListener("click", logout);
   els.authUsername?.addEventListener("input", scheduleAuthChecks);
   els.authEmail?.addEventListener("input", scheduleAuthChecks);
+  els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
+  els.packImportButton?.addEventListener("click", () => els.packImportInput?.click());
+  els.packImportInput?.addEventListener("change", importLessonPackFromFile);
+  els.packSyncButton?.addEventListener("click", syncLessonPacksFromGithub);
+  els.packSourceInput?.addEventListener("change", () => {
+    const value = els.packSourceInput.value.trim();
+    if (value) localStorage.setItem(PACK_SOURCE_STORAGE_KEY, value);
+  });
 }
 
 function renderAll() {
@@ -3582,6 +3607,7 @@ function renderLesson() {
   selectedOption = null;
   selectedBugLine = null;
   typedCode = "";
+  lastIdeaEvaluation = null;
 
   const topic = getCurrentTopic();
   const lesson = getCurrentLesson();
@@ -3600,6 +3626,7 @@ function renderLesson() {
   if (lesson.kind === "bug") renderBug(lesson);
   if (lesson.kind === "fix") renderCodeWrite(lesson, "Исправь код здесь");
   if (lesson.kind === "write") renderCodeWrite(lesson, "Напиши решение здесь");
+  if (lesson.kind === "idea") renderIdea(lesson);
 }
 
 function renderOrder(lesson) {
@@ -3685,6 +3712,26 @@ function renderCodeWrite(lesson, placeholder) {
     </div>
   `;
   document.getElementById("codeAnswer")?.addEventListener("keydown", handleCodeTextareaKeydown);
+}
+
+function renderIdea(lesson) {
+  const criteria = lesson.rubric || [];
+  els.challengeHost.innerHTML = `
+    <div class="idea-panel">
+      ${lesson.context ? `<pre class="code-panel idea-context"><code>${escapeHtml(lesson.context)}</code></pre>` : ""}
+      <div class="answer-label">Напиши план решения своими словами</div>
+      <textarea class="code-textarea idea-textarea" id="ideaAnswer" autocomplete="off" autocapitalize="sentences" spellcheck="true" placeholder="Например: валидация, baseline, что проверить, почему это должно сработать...">${escapeHtml(lesson.starter || "")}</textarea>
+      ${
+        criteria.length
+          ? `<div class="idea-rubric">${criteria
+              .map((item) => `<span>${escapeHtml(item.label)}</span>`)
+              .join("")}</div>`
+          : ""
+      }
+      ${lesson.testsText ? `<p class="tests-text">${escapeHtml(lesson.testsText)}</p>` : ""}
+    </div>
+  `;
+  document.getElementById("ideaAnswer")?.addEventListener("keydown", handleCodeTextareaKeydown);
 }
 
 function handleCodeTextareaKeydown(event) {
@@ -3860,6 +3907,11 @@ function describeCurrentAttempt(lesson) {
     const lines = splitUsefulLines(typedCode);
     return lines.length ? `В твоём коде сейчас ${lines.length} непустых строк. Сравниваю по смысловым действиям, а не просто по общей идее.` : "Код пока пустой.";
   }
+  if (lesson.kind === "idea") {
+    const text = document.getElementById("ideaAnswer")?.value || "";
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    return words ? `Ты написал примерно ${words} слов. Я проверяю не стиль, а наличие ключевых решений из рубрики.` : "План пока пустой.";
+  }
   return "";
 }
 
@@ -3869,7 +3921,21 @@ function buildMismatchHint(lesson) {
   if (lesson.kind === "fill") return buildFillMismatchHint(lesson);
   if (lesson.kind === "bug") return buildBugMismatchHint(lesson);
   if (lesson.kind === "fix" || lesson.kind === "write") return buildCodeMismatchHint(lesson);
+  if (lesson.kind === "idea") return buildIdeaMismatchHint(lesson);
   return "";
+}
+
+function buildIdeaMismatchHint(lesson) {
+  const evaluation = lastIdeaEvaluation || evaluateIdeaAnswer(lesson, document.getElementById("ideaAnswer")?.value || "");
+  const pieces = [];
+  if (evaluation.wordCount < (lesson.minWords || 35)) {
+    pieces.push(`Ответ короткий: сейчас ${evaluation.wordCount} слов, а для этой задачи нужно хотя бы ${lesson.minWords || 35}.`);
+  }
+  if (evaluation.missing.length) {
+    pieces.push(`Не хватает блоков плана: ${evaluation.missing.join(", ")}.`);
+  }
+  if (lesson.reference) pieces.push(`Эталонная рамка: ${lesson.reference}`);
+  return pieces.join("\n\n");
 }
 
 function buildOrderMismatchHint(lesson) {
@@ -3939,8 +4005,11 @@ function buildConceptHint(lesson) {
     lesson.prompt,
     lesson.code,
     lesson.starter,
+    lesson.context,
+    lesson.reference,
     lesson.hint,
     lesson.explain,
+    ...(lesson.rubric || []).map((item) => item.label),
     ...(lesson.blocks || []),
     ...(lesson.options || []),
   ]
@@ -4100,8 +4169,11 @@ function getLessonTerms(lesson) {
     lesson.prompt,
     lesson.code,
     lesson.starter,
+    lesson.context,
+    lesson.reference,
     lesson.hint,
     lesson.explain,
+    ...(lesson.rubric || []).map((item) => item.label),
     ...(lesson.blocks || []),
     ...(lesson.options || []),
   ]
@@ -4132,6 +4204,12 @@ function checkAnswer() {
         : normalizeCode(typedCode) === normalizeCode(answer),
     );
   }
+  if (lesson.kind === "idea") {
+    const input = document.getElementById("ideaAnswer");
+    typedCode = input?.value || "";
+    lastIdeaEvaluation = evaluateIdeaAnswer(lesson, typedCode);
+    ok = lastIdeaEvaluation.ok;
+  }
 
   if (ok) {
     const firstPass = !state.completed[lesson.id];
@@ -4140,7 +4218,7 @@ function checkAnswer() {
     if (firstPass) state.xp += 12;
     updateStreak();
     saveState();
-    showFeedback("Верно", lesson.explain, true);
+    showFeedback("Верно", lesson.kind === "idea" ? `${lesson.explain}\n\n${lesson.reference || ""}` : lesson.explain, true);
     sendEvent(lesson.id, true, firstPass ? 12 : 0);
     renderStats();
     renderTopics(document.querySelector(".filter-chip.is-active")?.dataset.filter || "all");
@@ -4218,6 +4296,9 @@ function renderLibrary() {
   els.libraryGrid.innerHTML = libraryCards
     .map((card) => `<div class="library-card"><strong>${card.title}</strong><p>${card.text}</p></div>`)
     .join("");
+  if (els.packSourceInput) {
+    els.packSourceInput.value = localStorage.getItem(PACK_SOURCE_STORAGE_KEY) || DEFAULT_PACK_INDEX_URL;
+  }
 }
 
 function renderStats() {
@@ -4340,8 +4421,132 @@ async function submitAuth(mode) {
     renderAll();
     showAuthStatus(mode === "login" ? "Вошёл. Прогресс синхронизирован." : "Аккаунт создан. Прогресс теперь в базе.", true);
   } catch (error) {
+    if (shouldUseLocalAuthFallback(error)) {
+      await submitLocalAuth(mode, { username, email, password, identity });
+      return;
+    }
     showAuthStatus(error.message);
   }
+}
+
+async function submitLocalAuth(mode, { username, email, password, identity }) {
+  if (!password || password.length < 6) {
+    showAuthStatus("Оффлайн-профиль тоже требует пароль минимум 6 символов.");
+    return;
+  }
+
+  const users = loadLocalUsers();
+  const normalizedIdentity = normalizeIdentity(identity);
+  if (mode === "register") {
+    const normalizedUsername = normalizeIdentity(username);
+    const normalizedEmail = normalizeIdentity(email);
+    if (!normalizedUsername || !normalizedEmail) {
+      showAuthStatus("Для локальной регистрации нужны логин и почта.");
+      return;
+    }
+    if (users.some((user) => normalizeIdentity(user.username) === normalizedUsername)) {
+      showAuthStatus("Такой локальный логин уже есть.");
+      return;
+    }
+    if (users.some((user) => normalizeIdentity(user.email) === normalizedEmail)) {
+      showAuthStatus("Такая локальная почта уже есть.");
+      return;
+    }
+    users.push({
+      username,
+      email,
+      passwordHash: await hashPassword(password),
+      createdAt: new Date().toISOString(),
+    });
+    saveLocalUsers(users);
+    setLocalCurrentUser(username);
+    saveLocalProgressForUser(username);
+    currentUser = { username, email, local: true };
+    renderAuthUi();
+    showAuthStatus("Онлайн API недоступен, создан локальный профиль. Прогресс хранится на этом устройстве.", true);
+    return;
+  }
+
+  const user = users.find(
+    (item) => normalizeIdentity(item.username) === normalizedIdentity || normalizeIdentity(item.email) === normalizedIdentity,
+  );
+  if (!user) {
+    showAuthStatus("Онлайн API недоступен, и такого локального профиля нет. Создай аккаунт локально.");
+    return;
+  }
+  if (user.passwordHash !== (await hashPassword(password))) {
+    showAuthStatus("Пароль локального профиля не совпал.");
+    return;
+  }
+  setLocalCurrentUser(user.username);
+  currentUser = { username: user.username, email: user.email, local: true };
+  loadLocalProgressForUser(user.username);
+  renderAll();
+  renderLeaderboard([]);
+  showAuthStatus("Вошёл в локальный профиль. Работает полностью оффлайн.", true);
+}
+
+async function bootstrapLocalAccount() {
+  const username = localStorage.getItem(LOCAL_CURRENT_USER_KEY);
+  if (!username) return;
+  const user = loadLocalUsers().find((item) => item.username === username);
+  if (!user) {
+    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
+    return;
+  }
+  currentUser = { username: user.username, email: user.email, local: true };
+  loadLocalProgressForUser(user.username);
+  renderAll();
+}
+
+function loadLocalUsers() {
+  try {
+    const users = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY));
+    return Array.isArray(users) ? users : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalUsers(users) {
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+}
+
+function setLocalCurrentUser(username) {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.setItem(LOCAL_CURRENT_USER_KEY, username);
+}
+
+function loadLocalProgressForUser(username) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(`${LOCAL_PROGRESS_PREFIX}${username}`));
+    if (!saved) return;
+    isApplyingRemote = true;
+    state = { ...state, ...saved };
+    currentTopicId = state.currentTopicId || currentTopicId;
+    currentLessonIndex = state.currentLessonIndex || currentLessonIndex;
+    currentScreen = state.currentScreen || currentScreen;
+    isApplyingRemote = false;
+  } catch {
+    // Local profile can start with current device progress.
+  }
+}
+
+function saveLocalProgressForUser(username) {
+  if (!username) return;
+  localStorage.setItem(`${LOCAL_PROGRESS_PREFIX}${username}`, JSON.stringify(state));
+}
+
+function normalizeIdentity(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function hashPassword(password) {
+  const bytes = new TextEncoder().encode(password);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function scheduleAuthChecks() {
@@ -4387,6 +4592,14 @@ async function checkAuthAvailability() {
 }
 
 async function logout() {
+  if (currentUser?.local) {
+    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
+    currentUser = null;
+    renderAuthUi();
+    renderLeaderboard([]);
+    showAuthStatus("Вышел из локального профиля. Прогресс остался на устройстве.", true);
+    return;
+  }
   try {
     await apiRequest("/api/logout", { method: "POST" });
   } catch {
@@ -4403,6 +4616,7 @@ async function bootstrapAccount() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   renderAuthUi();
   if (!token) {
+    await bootstrapLocalAccount();
     fetchLeaderboard();
     return;
   }
@@ -4417,6 +4631,7 @@ async function bootstrapAccount() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     currentUser = null;
     renderAuthUi();
+    await bootstrapLocalAccount();
     fetchLeaderboard();
   }
 }
@@ -4435,10 +4650,14 @@ function mergeRemoteProgress(progress) {
 
 function renderAuthUi() {
   if (!els.accountButton) return;
-  els.accountButton.textContent = currentUser ? `@${currentUser.username}` : "Войти";
+  els.accountButton.textContent = currentUser ? `@${currentUser.username}${currentUser.local ? " · local" : ""}` : "Войти";
   if (els.logoutButton) els.logoutButton.hidden = !currentUser;
   if (els.loginButton) els.loginButton.hidden = Boolean(currentUser);
   if (els.registerButton) els.registerButton.hidden = Boolean(currentUser);
+}
+
+function shouldUseLocalAuthFallback(error) {
+  return Boolean(error?.offline || error?.status === 404 || error?.status === 405 || error?.message === "API недоступен");
 }
 
 function renderLeaderboard(items = []) {
@@ -4469,13 +4688,16 @@ async function fetchLeaderboard() {
 }
 
 function queueProgressSync() {
-  if (!currentUser || isApplyingRemote) return;
+  if (!currentUser || currentUser.local || isApplyingRemote) {
+    if (currentUser?.local) saveLocalProgressForUser(currentUser.username);
+    return;
+  }
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncProgressNow, 550);
 }
 
 async function syncProgressNow() {
-  if (!currentUser) return;
+  if (!currentUser || currentUser.local) return;
   try {
     const data = await apiRequest("/api/progress", {
       method: "PUT",
@@ -4496,7 +4718,7 @@ async function syncProgressNow() {
 }
 
 async function sendEvent(lessonId, correct, xpDelta) {
-  if (!currentUser) return;
+  if (!currentUser || currentUser.local) return;
   try {
     await apiRequest("/api/event", { method: "POST", body: { lessonId, correct, xpDelta } });
   } catch {
@@ -4508,19 +4730,197 @@ async function apiRequest(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token && !options.skipAuth) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers,
-    credentials: "same-origin",
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: options.method || "GET",
+      headers,
+      credentials: "same-origin",
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    const error = new Error("API недоступен");
+    error.offline = true;
+    throw error;
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) throw new Error(data.error || "API недоступен");
+  if (!response.ok || data.ok === false) {
+    const error = new Error(data.error || "API недоступен");
+    error.status = response.status;
+    throw error;
+  }
   return data;
+}
+
+async function loadLessonPacks() {
+  for (const url of DEFAULT_PACK_URLS) {
+    try {
+      const response = await fetch(url, { cache: "no-cache" });
+      if (response.ok) mergeLessonPack(await response.json());
+    } catch {
+      // Built-in app.js lessons are enough if pack loading fails.
+    }
+  }
+  loadStoredLessonPacks().forEach((pack) => mergeLessonPack(pack));
+}
+
+function mergeLessonPack(pack) {
+  if (!pack?.topics?.length) return { added: 0, skipped: 0 };
+  let added = 0;
+  let skipped = 0;
+
+  for (const incoming of pack.topics) {
+    if (!incoming?.id || !Array.isArray(incoming.lessons)) continue;
+    let topic = topics.find((item) => item.id === incoming.id);
+    if (!topic) {
+      topic = {
+        id: incoming.id,
+        title: incoming.title || incoming.id,
+        track: incoming.track || pack.title || "Пак заданий",
+        tag: incoming.tag || "contest",
+        icon: incoming.icon || "PK",
+        color: incoming.color || "#8b9bb4",
+        copy: incoming.copy || "Импортированный набор заданий.",
+        rules: incoming.rules || [],
+        lessons: [],
+      };
+      topics.push(topic);
+    } else if (incoming.rules?.length) {
+      topic.rules = [...new Set([...(topic.rules || []), ...incoming.rules])];
+    }
+
+    const existing = new Set(topic.lessons.map((lesson) => lesson.id));
+    for (const lesson of incoming.lessons) {
+      if (!lesson?.id || existing.has(lesson.id)) {
+        skipped += 1;
+        continue;
+      }
+      topic.lessons.push(lesson);
+      existing.add(lesson.id);
+      added += 1;
+    }
+  }
+  return { added, skipped };
+}
+
+function loadStoredLessonPacks() {
+  try {
+    const packs = JSON.parse(localStorage.getItem(PACK_STORAGE_KEY));
+    return Array.isArray(packs) ? packs : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredLessonPack(pack) {
+  const packs = loadStoredLessonPacks();
+  const packId = pack.id || `imported-${Date.now()}`;
+  const next = packs.filter((item) => item.id !== packId);
+  next.push({ ...pack, id: packId, importedAt: new Date().toISOString() });
+  localStorage.setItem(PACK_STORAGE_KEY, JSON.stringify(next));
+}
+
+function exportLessonPackSnapshot() {
+  const pack = {
+    schemaVersion: 1,
+    id: `mlingo-snapshot-${todayKey()}`,
+    title: "MLingo current lesson bank",
+    exportedAt: new Date().toISOString(),
+    topics,
+  };
+  const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${pack.id}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showPackStatus(`Экспортировано: ${flatLessons().length} заданий.`, true);
+}
+
+async function importLessonPackFromFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const pack = JSON.parse(await file.text());
+    const result = mergeLessonPack(pack);
+    saveStoredLessonPack(pack);
+    ensureValidTopicSelection();
+    saveState();
+    renderAll();
+    showPackStatus(`Импортировано: ${result.added} новых заданий, пропущено дублей: ${result.skipped}.`, true);
+  } catch (error) {
+    showPackStatus(`Не смог прочитать pack JSON: ${error.message}`);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function syncLessonPacksFromGithub() {
+  const indexUrl = (els.packSourceInput?.value || DEFAULT_PACK_INDEX_URL).trim();
+  if (!indexUrl) {
+    showPackStatus("Укажи URL на index.json в GitHub raw.");
+    return;
+  }
+  localStorage.setItem(PACK_SOURCE_STORAGE_KEY, indexUrl);
+  showPackStatus("Синхронизирую pack index...");
+  try {
+    const index = await fetchJson(indexUrl);
+    const packRefs = Array.isArray(index.packs) ? index.packs : [];
+    if (!packRefs.length) throw new Error("В index.json нет массива packs.");
+
+    let added = 0;
+    let skipped = 0;
+    for (const ref of packRefs) {
+      const packUrl = resolvePackUrl(typeof ref === "string" ? ref : ref.url, indexUrl);
+      if (!packUrl) continue;
+      const pack = await fetchJson(packUrl);
+      const result = mergeLessonPack(pack);
+      saveStoredLessonPack({ ...pack, sourceUrl: packUrl });
+      added += result.added;
+      skipped += result.skipped;
+    }
+
+    ensureValidTopicSelection();
+    saveState();
+    renderAll();
+    showPackStatus(`GitHub sync готов: новых заданий ${added}, дублей пропущено ${skipped}.`, true);
+  } catch (error) {
+    showPackStatus(`GitHub sync не удался: ${error.message}`);
+  }
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { cache: "no-cache" });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+function resolvePackUrl(url, indexUrl) {
+  if (!url) return "";
+  return new URL(url, indexUrl).toString();
+}
+
+function showPackStatus(text, good = false) {
+  if (!els.packStatus) return;
+  els.packStatus.hidden = false;
+  els.packStatus.className = `feedback pack-status ${good ? "is-good" : "is-bad"}`;
+  els.packStatus.textContent = text;
 }
 
 function getCurrentTopic() {
   return topics.find((topic) => topic.id === currentTopicId) || topics[0];
+}
+
+function ensureValidTopicSelection() {
+  if (!topics.some((topic) => topic.id === currentTopicId)) {
+    currentTopicId = topics[0].id;
+    currentLessonIndex = 0;
+  }
+  const topic = getCurrentTopic();
+  if (!topic.lessons[currentLessonIndex]) currentLessonIndex = 0;
+  state.currentTopicId = currentTopicId;
+  state.currentLessonIndex = currentLessonIndex;
 }
 
 function getCurrentLesson() {
@@ -4592,6 +4992,22 @@ function shuffle(items) {
 
 function arraysEqual(a, b) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function evaluateIdeaAnswer(lesson, value) {
+  const text = String(value || "").toLowerCase();
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const rubric = lesson.rubric || [];
+  const hits = rubric.filter((item) => (item.keywords || []).some((keyword) => text.includes(String(keyword).toLowerCase())));
+  const missing = rubric.filter((item) => !hits.includes(item)).map((item) => item.label);
+  const minRubric = lesson.minRubric || Math.min(3, rubric.length);
+  const minWords = lesson.minWords || 35;
+  return {
+    wordCount,
+    hitCount: hits.length,
+    missing,
+    ok: wordCount >= minWords && hits.length >= minRubric,
+  };
 }
 
 function acceptedAnswers(lesson) {

@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "id": "recsys-rerank-pack-v1",
+  "title": "RecSys and Rerankers Expansion",
+  "description": "Candidate generation, reranker features, leakage-safe validation and ranking metrics.",
+  "topics": [
+    {
+      "id": "recsys-two-stage",
+      "title": "RecSys: two-stage",
+      "track": "Candidates / Rerankers",
+      "tag": "recsys",
+      "icon": "RS",
+      "color": "#c9b778",
+      "copy": "Двухстадийные рекомендации: сначала recall через candidates, потом reranker сортирует пары user-item.",
+      "rules": [
+        "Если candidate generator не принес true item, reranker уже не спасет",
+        "Negative sampling должен быть похож на реальные кандидаты",
+        "Фичи для пары user-item считаются без будущего"
+      ],
+      "lessons": [
+        {
+          "id": "recsys-two-stage-choice",
+          "kind": "choice",
+          "title": "Two-stage ranker",
+          "prompt": "Что оптимизирует первая стадия в candidate generation?",
+          "options": ["Высокий Recall@K при разумном числе кандидатов", "Идеальную калибровку вероятностей", "Минимальный logloss на всех item", "Красивые embedding names"],
+          "answer": "Высокий Recall@K при разумном числе кандидатов",
+          "hint": "Если true item не попал в candidates, reranker его уже не вернет.",
+          "explain": "Первая стадия должна не пропустить relevant items; точную сортировку делает reranker.",
+          "difficulty": 1
+        },
+        {
+          "id": "recsys-last-item-candidates",
+          "kind": "write",
+          "title": "Last-item candidates",
+          "prompt": "Напиши candidate generator: для каждого user взять последний item из train history и выдать top похожих items из `sim_items`.",
+          "starter": "def last_item_candidates(train, valid_users, sim_items, k=50):",
+          "answer": "def last_item_candidates(train, valid_users, sim_items, k=50):\n    last_rows = train.sort_values('ts').groupby('user_id').tail(1)\n    last_item = pd.Series(last_rows['item_id'].values, index=last_rows['user_id'])\n    rows = []\n    for user in valid_users:\n        item = last_item.get(user)\n        for cand in sim_items.get(item, [])[:k]:\n            rows.append({'user_id': user, 'item_id': cand})\n    return pd.DataFrame(rows)",
+          "testsText": "Проверяется, что candidates строятся из последнего train item пользователя.",
+          "hint": "Candidate generation отвечает за широкий Recall@K, а не за точную сортировку.",
+          "explain": "Last-item similarity часто сильнее global popular, потому что учитывает свежий интерес пользователя.",
+          "difficulty": 3
+        },
+        {
+          "id": "recsys-hard-negatives",
+          "kind": "write",
+          "title": "Hard negatives",
+          "prompt": "Собери hard negatives: для каждого positive user-item выбрать популярный item, который user не видел и который не равен positive.",
+          "starter": "def add_hard_negatives(train, positives, k=1):",
+          "answer": "def add_hard_negatives(train, positives, k=1):\n    popular = train['item_id'].value_counts().index.tolist()\n    seen = train.groupby('user_id')['item_id'].apply(set).to_dict()\n    rows = []\n    for _, row in positives.iterrows():\n        user = row['user_id']\n        forbidden = seen.get(user, set()) | {row['item_id']}\n        picked = [item for item in popular if item not in forbidden][:k]\n        rows += [{'user_id': user, 'item_id': item, 'label': 0} for item in picked]\n    return pd.DataFrame(rows)",
+          "testsText": "Проверяется, что negative не в seen и не равен positive item.",
+          "hint": "Hard negative похож на правдоподобный кандидат, но label у него 0.",
+          "explain": "Слишком случайные negatives делают задачу легкой; hard negatives учат reranker различать близкие варианты.",
+          "difficulty": 4
+        },
+        {
+          "id": "rerank-pairwise-features",
+          "kind": "write",
+          "title": "Pairwise features",
+          "prompt": "Добавь pairwise признаки к candidates: user-item count и долю item в истории пользователя.",
+          "starter": "# train has user_id,item_id; candidates has user_id,item_id",
+          "answer": "ui_count = train.groupby(['user_id', 'item_id']).size().rename('ui_count')\nuser_count = train.groupby('user_id').size().rename('user_count')\ncandidates = candidates.join(ui_count, on=['user_id', 'item_id'])\ncandidates = candidates.join(user_count, on='user_id')\ncandidates['ui_count'] = candidates['ui_count'].fillna(0).astype('int32')\ncandidates['user_count'] = candidates['user_count'].fillna(0).astype('int32')\ncandidates['ui_share'] = candidates['ui_count'] / candidates['user_count'].clip(lower=1)",
+          "testsText": "Проверяется unseen user-item pair и отсутствие деления на ноль.",
+          "hint": "Pairwise feature зависит сразу от user и item.",
+          "explain": "Reranker обычно выигрывает не от одной популярности item, а от признаков совместимости user-item.",
+          "difficulty": 4
+        },
+        {
+          "id": "recsys-inbatch-negatives",
+          "kind": "write",
+          "title": "In-batch negatives logits",
+          "prompt": "Напиши logits для in-batch negatives: user_vec BxD, item_vec BxD, positive item стоит на диагонали.",
+          "starter": "def inbatch_logits(user_vec, item_vec):",
+          "answer": "def inbatch_logits(user_vec, item_vec):\n    logits = user_vec @ item_vec.T\n    target = torch.arange(user_vec.size(0), device=user_vec.device)\n    return logits, target",
+          "testsText": "Проверяется shape BxB и target [0..B-1].",
+          "hint": "Каждый item в batch является negative для других users.",
+          "explain": "In-batch negatives экономят sampling и дают плотный contrastive сигнал без предобученных моделей.",
+          "difficulty": 4
+        },
+        {
+          "id": "recsys-candidate-dedupe",
+          "kind": "fix",
+          "title": "Candidate dedupe",
+          "prompt": "Исправь candidates: один и тот же user-item мог прийти из popular и similar генераторов.",
+          "code": "candidates = pd.concat([popular_cands, similar_cands])\ncandidates['rank_source'] = candidates.groupby('user_id').cumcount()",
+          "answer": "candidates = pd.concat([popular_cands, similar_cands], ignore_index=True)\ncandidates = candidates.drop_duplicates(['user_id', 'item_id']).reset_index(drop=True)\ncandidates['rank_source'] = candidates.groupby('user_id').cumcount()",
+          "hint": "Reranker не должен видеть одну пару дважды с разными строками.",
+          "explain": "Дубли user-item искажают обучение, метрики и submission ranking.",
+          "difficulty": 3
+        }
+      ]
+    },
+    {
+      "id": "ranking-metrics",
+      "title": "Ranking metrics",
+      "track": "Recall / MAP / NDCG",
+      "tag": "recsys",
+      "icon": "RK",
+      "color": "#9caec7",
+      "copy": "Ручная реализация метрик, чтобы не путать global accuracy с per-user ranking quality.",
+      "rules": [
+        "Ranking metric обычно считается отдельно по user, потом усредняется",
+        "K ограничивает список рекомендаций, а не ground truth",
+        "Sampled metrics могут быть оптимистичнее полного candidate space"
+      ],
+      "lessons": [
+        {
+          "id": "recsys-mean-recall-at-k",
+          "kind": "write",
+          "title": "Mean Recall@K",
+          "prompt": "Напиши средний Recall@K по пользователям: `pred_by_user` и `true_by_user` - dict user -> list/set items.",
+          "starter": "def mean_recall_at_k(pred_by_user, true_by_user, k):",
+          "answer": "def mean_recall_at_k(pred_by_user, true_by_user, k):\n    scores = []\n    for user, relevant in true_by_user.items():\n        relevant = set(relevant)\n        if not relevant:\n            continue\n        recommended = pred_by_user.get(user, [])[:k]\n        hits = len(set(recommended) & relevant)\n        scores.append(hits / len(relevant))\n    return float(np.mean(scores)) if scores else 0.0",
+          "testsText": "Проверяется user без predictions и пропуск пустых relevant.",
+          "hint": "Сначала metric per user, потом mean.",
+          "explain": "Offline recsys метрики почти всегда усредняются по пользователям, а не по одной общей куче items.",
+          "difficulty": 3
+        },
+        {
+          "id": "recsys-map-at-k",
+          "kind": "write",
+          "title": "MAP@K",
+          "prompt": "Напиши MAP@K как среднее AP@K по пользователям.",
+          "starter": "def map_at_k(pred_by_user, true_by_user, k):",
+          "answer": "def map_at_k(pred_by_user, true_by_user, k):\n    scores = []\n    for user, relevant in true_by_user.items():\n        relevant = set(relevant)\n        if not relevant:\n            continue\n        hits = 0\n        score = 0.0\n        for rank, item in enumerate(pred_by_user.get(user, [])[:k], start=1):\n            if item in relevant:\n                hits += 1\n                score += hits / rank\n        scores.append(score / min(len(relevant), k))\n    return float(np.mean(scores)) if scores else 0.0",
+          "testsText": "Проверяется AP по каждому user и mean.",
+          "hint": "MAP - это не один AP на всех строках, а mean по группам.",
+          "explain": "MAP@K наказывает за поздние попадания сильнее, чем Recall@K.",
+          "difficulty": 4
+        },
+        {
+          "id": "recsys-graded-ndcg",
+          "kind": "write",
+          "title": "Graded NDCG@K",
+          "prompt": "Напиши NDCG@K для graded relevance: `rel_by_item` хранит gain item -> 0/1/2/3.",
+          "starter": "def graded_ndcg_at_k(recommended, rel_by_item, k):",
+          "answer": "def graded_ndcg_at_k(recommended, rel_by_item, k):\n    dcg = 0.0\n    for rank, item in enumerate(recommended[:k], start=1):\n        rel = rel_by_item.get(item, 0)\n        dcg += (2 ** rel - 1) / np.log2(rank + 1)\n    ideal = sorted(rel_by_item.values(), reverse=True)[:k]\n    idcg = sum((2 ** rel - 1) / np.log2(rank + 1) for rank, rel in enumerate(ideal, start=1))\n    return dcg / idcg if idcg > 0 else 0.0",
+          "testsText": "Проверяется discount, gain 2**rel-1 и idcg=0.",
+          "hint": "Graded relevance ценит сильные positive выше слабых.",
+          "explain": "NDCG подходит не только для binary relevance: покупки, клики и добавления в корзину можно задать разными gains.",
+          "difficulty": 5
+        },
+        {
+          "id": "recsys-recall-sampled-bug",
+          "kind": "bug",
+          "title": "Sampled Recall bug",
+          "prompt": "Какая строка делает Recall@K завышенным из-за оценки только на sampled negatives?",
+          "lines": [
+            "items = [true_item] + sampled_negative_items",
+            "scores = model.score(user, items)",
+            "ranked = [items[i] for i in np.argsort(scores)[::-1]]",
+            "recall = float(true_item in ranked[:10])"
+          ],
+          "answer": 0,
+          "hint": "Настоящий candidate space шире, чем true item плюс несколько negatives.",
+          "explain": "Sampled Recall может быть полезен для debug, но он обычно оптимистичнее полного Recall по всем доступным candidate items.",
+          "difficulty": 4
+        }
+      ]
+    },
+    {
+      "id": "leakage-safe-validation",
+      "title": "Validation без leakage",
+      "track": "OOF / Time split / Encoding",
+      "tag": "validation",
+      "icon": "VL",
+      "color": "#c8b36f",
+      "copy": "Валидация для ML-олимпиад: OOF target encoding, GroupKFold, time cutoff и early stopping.",
+      "rules": [
+        "Все fit-статистики считаются только на train-fold",
+        "В time-aware задачах признаки не должны смотреть в будущее",
+        "OOF predictions нужны для честного подбора threshold и blending"
+      ],
+      "lessons": [
+        {
+          "id": "tabular-oof-target-encoding",
+          "kind": "write",
+          "title": "OOF target encoding",
+          "prompt": "Напиши mean target encoding для `cat_col` без leakage: train получает OOF значения, test - mapping по full train.",
+          "starter": "def oof_target_encode(train, test, cat_col, target_col, cv):",
+          "answer": "def oof_target_encode(train, test, cat_col, target_col, cv):\n    global_mean = train[target_col].mean()\n    oof = pd.Series(global_mean, index=train.index, dtype='float64')\n    for tr_idx, val_idx in cv.split(train, train[target_col]):\n        mapping = train.iloc[tr_idx].groupby(cat_col)[target_col].mean()\n        oof.iloc[val_idx] = train.iloc[val_idx][cat_col].map(mapping).fillna(global_mean)\n    full_mapping = train.groupby(cat_col)[target_col].mean()\n    test_encoded = test[cat_col].map(full_mapping).fillna(global_mean)\n    return oof, test_encoded",
+          "testsText": "Проверяется, что val fold кодируется mapping только из tr fold.",
+          "hint": "OOF нужен именно для train; test можно кодировать mapping по всему train.",
+          "explain": "Mean target encoding мощный, но при fit на всей train-таблице он протекает target в признаки.",
+          "difficulty": 5
+        },
+        {
+          "id": "validation-group-kfold-user",
+          "kind": "write",
+          "title": "GroupKFold by user",
+          "prompt": "Напиши OOF split для reranker через GroupKFold, чтобы один user не попадал и в train, и в valid fold.",
+          "starter": "from sklearn.model_selection import GroupKFold\n# fill oof",
+          "answer": "from sklearn.model_selection import GroupKFold\n\noof = np.zeros(len(df))\ngkf = GroupKFold(n_splits=5)\nfor tr_idx, val_idx in gkf.split(df, df['label'], groups=df['user_id']):\n    model = make_model()\n    model.fit(df.iloc[tr_idx][features], df.iloc[tr_idx]['label'])\n    oof[val_idx] = model.predict_proba(df.iloc[val_idx][features])[:, 1]",
+          "testsText": "Проверяется groups=df['user_id'] и fresh model per fold.",
+          "hint": "Row split почти всегда течет, если у пользователя много candidate rows.",
+          "explain": "Group split проверяет перенос на новых пользователей или хотя бы убирает memorization user-level строк.",
+          "difficulty": 4
+        },
+        {
+          "id": "validation-two-stage-labels",
+          "kind": "order",
+          "title": "Two-stage labels",
+          "prompt": "Собери порядок подготовки train data для reranker в двухстадийной схеме.",
+          "blocks": [
+            "train_events, valid_events = leave_last_out(interactions)",
+            "candidate_pairs = generate_candidates(train_events, k=200)",
+            "positives = valid_events[['user_id', 'item_id']].assign(label=1)",
+            "rank_data = candidate_pairs.merge(positives, on=['user_id', 'item_id'], how='left')",
+            "rank_data['label'] = rank_data['label'].fillna(0).astype('int8')"
+          ],
+          "answer": [
+            "train_events, valid_events = leave_last_out(interactions)",
+            "candidate_pairs = generate_candidates(train_events, k=200)",
+            "positives = valid_events[['user_id', 'item_id']].assign(label=1)",
+            "rank_data = candidate_pairs.merge(positives, on=['user_id', 'item_id'], how='left')",
+            "rank_data['label'] = rank_data['label'].fillna(0).astype('int8')"
+          ],
+          "hint": "Label появляется после генерации candidates и merge с future positives.",
+          "explain": "Reranker учится сортировать только те пары, которые candidate generator реально принес.",
+          "difficulty": 3
+        },
+        {
+          "id": "validation-time-cutoff-features",
+          "kind": "fix",
+          "title": "Feature cutoff time",
+          "prompt": "Исправь leakage: признаки для valid candidates считаются с событиями после времени кандидата.",
+          "code": "history = interactions.groupby('user_id')['item_id'].apply(list).to_dict()\ncandidates['hist_len'] = candidates['user_id'].map(lambda u: len(history.get(u, [])))",
+          "answer": "rows = []\nfor _, row in candidates.iterrows():\n    past = interactions[(interactions['user_id'] == row['user_id']) & (interactions['ts'] < row['candidate_ts'])]\n    rows.append(len(past))\ncandidates['hist_len'] = rows",
+          "hint": "Для каждой candidate row доступны только события строго раньше candidate_ts.",
+          "explain": "Time-aware признаки должны иметь cutoff; иначе valid получает информацию из будущего.",
+          "difficulty": 5
+        },
+        {
+          "id": "catboost-categorical-features",
+          "kind": "fix",
+          "title": "CatBoost cat_features",
+          "prompt": "Исправь CatBoost baseline: категориальные колонки переданы как числа без `cat_features`.",
+          "code": "model = CatBoostClassifier(iterations=500, verbose=False, random_seed=42)\nmodel.fit(X_train, y_train, eval_set=(X_valid, y_valid))",
+          "answer": "cat_cols = ['user_id', 'item_id', 'category']\nmodel = CatBoostClassifier(iterations=500, verbose=False, random_seed=42)\nmodel.fit(X_train, y_train, cat_features=cat_cols, eval_set=(X_valid, y_valid))",
+          "hint": "CatBoost умеет категории сам, но нужно сказать, какие колонки categorical.",
+          "explain": "Для recsys/tabular baseline user_id/item_id/category часто лучше передавать как категории, а не как порядковые числа.",
+          "difficulty": 3
+        },
+        {
+          "id": "lgbm-early-stopping",
+          "kind": "fix",
+          "title": "LightGBM early stopping",
+          "prompt": "Исправь обучение LightGBM: добавь validation set и early stopping по честной валидации.",
+          "code": "model = LGBMClassifier(n_estimators=5000, learning_rate=0.03, random_state=42)\nmodel.fit(X_train, y_train)",
+          "answer": "model = LGBMClassifier(n_estimators=5000, learning_rate=0.03, random_state=42)\nmodel.fit(\n    X_train,\n    y_train,\n    eval_set=[(X_valid, y_valid)],\n    eval_metric='auc',\n    callbacks=[early_stopping(100), log_evaluation(100)],\n)",
+          "hint": "Много деревьев нормально, если остановиться по valid.",
+          "explain": "Early stopping защищает от лишних итераций и делает сравнение экспериментов стабильнее.",
+          "difficulty": 4
+        },
+        {
+          "id": "threshold-by-f1",
+          "kind": "write",
+          "title": "Threshold by F1",
+          "prompt": "Подбери threshold на validation probabilities, максимизируя F1.",
+          "starter": "def best_f1_threshold(y_true, prob):",
+          "answer": "def best_f1_threshold(y_true, prob):\n    best_t, best_score = 0.5, -1\n    for t in np.linspace(0.01, 0.99, 99):\n        pred = (prob >= t).astype(int)\n        score = f1_score(y_true, pred)\n        if score > best_score:\n            best_t, best_score = t, score\n    return best_t, best_score",
+          "testsText": "Проверяется перебор thresholds и возврат лучшего score.",
+          "hint": "Threshold подбирается только на validation или OOF, не на test.",
+          "explain": "Калиброванные вероятности и хороший threshold особенно важны при дисбалансе классов.",
+          "difficulty": 3
+        }
+      ]
+    }
+  ]
+}
