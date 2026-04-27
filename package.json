@@ -1,6 +1,6 @@
 {
   "name": "mlingo",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Offline-first ML coding trainer.",
   "scripts": {
@@ -8,9 +8,10 @@
     "check": "npm test && npm run test:web && npm run test:site",
     "check:syntax": "node --check app.js",
     "audit:lessons": "python3 scripts/audit_lessons.py",
-    "test": "npm run check:syntax && npm run test:server && npm run test:static && npm run test:lessons && npm run audit:lessons",
+    "test": "npm run check:syntax && npm run test:server && npm run test:static && npm run test:auth && npm run test:lessons && npm run audit:lessons",
     "test:server": "PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py",
     "test:static": "node scripts/test_static_app.mjs",
+    "test:auth": "node scripts/test_auth_mode.mjs",
     "test:lessons": "node scripts/test_lesson_packs.mjs",
     "test:web": "npm run cap:prepare && node scripts/test_capacitor_web.mjs",
     "test:site": "node scripts/test_http_smoke.mjs",

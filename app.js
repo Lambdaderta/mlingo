@@ -4,7 +4,7 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.4";
+const APP_VERSION = "0.1.5";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -13,7 +13,7 @@ const DEFAULT_PACK_URLS = [
 ];
 const DEFAULT_PACK_INDEX_URL = "https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json";
 const API_BASE = window.MLINGO_API_BASE || "";
-const AUTH_REQUIRED = true;
+const AUTH_REQUIRED = false;
 
 const topics = [
   {
@@ -4437,8 +4437,8 @@ function showAuthStatus(text, good = false) {
 function startGithubLogin() {
   if (!runtimeConfig.githubOAuth) {
     openAuthModal();
-    showAuthStatus("GitHub OAuth не настроен на backend. Добавь GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET, затем открой MLingo через сервер.");
-    showGithubIntegrationMessage("Backend OAuth не настроен. GitHub-only вход требует настроенного OAuth App.", false);
+    showAuthStatus("GitHub OAuth пока не настроен на backend. Можно продолжать тренироваться без входа.");
+    showGithubIntegrationMessage("Backend OAuth не настроен. Для облачного аккаунта позже добавь GitHub OAuth App.", false);
     return;
   }
   window.location.assign(`${API_BASE}/api/auth/github/start`);
@@ -4595,6 +4595,7 @@ async function bootstrapAccount() {
     return;
   }
   if (authResult === "github-error") {
+    openAuthModal();
     showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз.");
     history.replaceState(null, "", window.location.pathname);
   }
@@ -4631,6 +4632,7 @@ async function bootstrapGithubAccount() {
     currentUser = null;
     renderAuthUi();
     fetchLeaderboard();
+    openAuthModal();
     showAuthStatus("GitHub-сессия не подтянулась. Проверь настройки backend OAuth.");
   } finally {
     history.replaceState(null, "", window.location.pathname);
@@ -4670,7 +4672,7 @@ function renderAuthUi({ skipGate = false } = {}) {
   const provider = currentUser?.github?.login ? " · GitHub" : "";
   const locked = isAuthLocked();
   document.body.classList.toggle("auth-required", locked);
-  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "GitHub вход";
+  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "GitHub";
   if (els.authModal) els.authModal.dataset.locked = locked ? "true" : "false";
   if (els.authCloseButton) els.authCloseButton.hidden = locked;
   if (els.logoutButton) els.logoutButton.hidden = !currentUser;

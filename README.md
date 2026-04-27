@@ -7,8 +7,8 @@ MLingo — темный offline-first тренажер для ручного ML-
 ## Возможности
 
 - PWA-интерфейс для desktop и mobile.
-- Обязательный вход через GitHub перед уроками; аккаунт MLingo создается автоматически через OAuth.
-- Локальное устройство хранит кэш прогресса, а backend синхронизирует прогресс, стрики и leaderboard.
+- Уроки доступны без регистрации; GitHub-вход пока опционален и нужен для будущей синхронизации.
+- Локальное устройство хранит кэш прогресса, а backend позже сможет синхронизировать прогресс, стрики и leaderboard.
 - GitHub sync: прогресс и решения можно сохранять в свой `mlingo-solutions`.
 - Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, интеграций, синхронизации и leaderboard.
 - JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
@@ -54,7 +54,7 @@ python3 server.py --port 4180
 - `DATABASE_URL` — строка подключения к PostgreSQL.
 - `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.app`.
 - `PORT` — порт приложения, по умолчанию `4180`.
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — данные GitHub OAuth App; без них вход в MLingo не откроется.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — данные GitHub OAuth App для опционального GitHub-входа.
 - `GITHUB_OAUTH_REDIRECT_URI` — callback URL, например `https://mlingo.app/api/auth/github/callback`.
 - `GITHUB_OAUTH_SCOPES` — по умолчанию `read:user user:email public_repo`, чтобы repo mode мог пушить публичные решения.
 - `GITHUB_SOLUTIONS_REPO_NAME` — имя репозитория решений, по умолчанию `mlingo-solutions`.
@@ -135,8 +135,8 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Публичный APK для тестеров публикуется через GitHub Releases:
 
 ```bash
-git tag -a v0.1.4 -m "MLingo v0.1.4"
-git push origin v0.1.4
+git tag -a v0.1.5 -m "MLingo v0.1.5"
+git push origin v0.1.5
 ```
 
 Workflow `release-apps` соберет Android APK и macOS zip, затем прикрепит их к Release. Подробности: [docs/apps.md](docs/apps.md).
@@ -154,7 +154,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.4-macOS.zip
+dist/MLingo-v0.1.5-macOS.zip
 ```
 
 ## Деплой

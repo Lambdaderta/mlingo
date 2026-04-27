@@ -75,7 +75,7 @@ for (const pack of packIndex.packs) {
 assert.ok(app.includes("async function syncLessonPacksFromGithub"), "app should include GitHub lesson sync");
 assert.ok(app.includes("async function loadRuntimeConfig"), "app should load runtime backend config");
 assert.ok(app.includes("function startGithubLogin"), "app should include GitHub login flow");
-assert.ok(app.includes("const AUTH_REQUIRED = true"), "app should require registration before practice");
+assert.ok(app.includes("const AUTH_REQUIRED = false"), "app should allow practice without registration in local/offline mode");
 assert.ok(app.includes("function enforceAuthGate"), "app should enforce the auth gate");
 assert.ok(app.includes("async function disconnectGithub"), "app should include GitHub disconnect flow");
 assert.ok(app.includes("async function enableGithubRepoMode"), "app should include GitHub repo mode enable flow");
@@ -110,7 +110,7 @@ assert.equal(capacitorConfig.appName, "MLingo", "Capacitor appName should be sta
 assert.equal(capacitorConfig.webDir, "web", "Capacitor webDir should be web");
 assert.equal(capacitorConfig.server?.androidScheme, "https", "Capacitor Android scheme should be https");
 
-for (const script of ["test", "test:server", "test:lessons", "test:static", "test:web", "test:site", "check", "android:debug", "android:test", "macos:build", "cap:prepare"]) {
+for (const script of ["test", "test:server", "test:auth", "test:lessons", "test:static", "test:web", "test:site", "check", "android:debug", "android:test", "macos:build", "cap:prepare"]) {
   assert.ok(packageJson.scripts?.[script], `package.json should define ${script}`);
 }
 

@@ -9,12 +9,12 @@ Frontend: index.html + app.js + styles.css
 Банк заданий: встроенные уроки + lesson-packs/*.json
 Кэш прогресса на устройстве: localStorage
 GitHub-прогресс: backend repo mode или local token + GitHub Contents API
-Облачный прогресс: GitHub OAuth + Python API + PostgreSQL
+Облачный прогресс позже: GitHub OAuth + Python API + PostgreSQL
 Android: Capacitor wrapper с immersive mode
 macOS: native AppKit + WKWebView wrapper
 ```
 
-Вход обязателен перед уроками и идет только через GitHub. Для OAuth нужны `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET` на backend; кнопка GitHub создает или открывает аккаунт MLingo автоматически. Кэш уроков и прогресса остается на устройстве, но локальных password-профилей в приложении больше нет.
+Уроки доступны без регистрации. GitHub-вход пока опционален: для OAuth нужны `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET` на backend; кнопка GitHub создаст или откроет аккаунт MLingo автоматически, когда backend будет настроен. Кэш уроков и прогресса остается на устройстве, локальных password-профилей в приложении нет.
 
 ## Android APK
 
@@ -76,7 +76,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.4-macOS.zip
+dist/MLingo-v0.1.5-macOS.zip
 ```
 
 Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
@@ -88,17 +88,17 @@ APK и macOS zip не нужно хранить в git. Workflow `.github/workfl
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.4 -m "MLingo v0.1.4"
-git push origin v0.1.4
+git tag -a v0.1.5 -m "MLingo v0.1.5"
+git push origin v0.1.5
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.4 -> Assets
+GitHub repo -> Releases -> v0.1.5 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.4`, и workflow перезальет APK/macOS zip в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.5`, и workflow перезальет APK/macOS zip в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 
