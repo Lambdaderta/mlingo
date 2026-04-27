@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean11" />
-    <script defer src="./app.js?v=clean11"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean12" />
+    <script defer src="./app.js?v=clean12"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -154,34 +154,63 @@
                     <h3>GitHub</h3>
                   </div>
                 </div>
-                <p>Подключи GitHub, чтобы аккаунт MLingo был привязан к твоему профилю. Следующим шагом сюда ляжет автосохранение решений в personal repo.</p>
+                <p>Без сервера MLingo может хранить прогресс и решения прямо в твоём GitHub repo. Для этого нужен fine-grained token с доступом Contents: Read and write к одному репозиторию.</p>
                 <div class="integration-status" id="githubIntegrationPanel">
                   <div class="integration-mark" id="githubIntegrationMark">GH</div>
                   <div>
                     <strong id="githubIntegrationTitle">GitHub не подключен</strong>
-                    <small id="githubIntegrationSubtitle">Войди через GitHub, когда backend OAuth настроен.</small>
+                    <small id="githubIntegrationSubtitle">Сохрани локальный GitHub token или войди через backend OAuth позже.</small>
                   </div>
                   <div class="integration-actions">
-                    <button class="primary-button" id="githubConnectButton" type="button">Подключить</button>
+                    <button class="primary-button" id="githubTokenSaveButton" type="button">Сохранить token</button>
+                    <button class="primary-button" id="githubProgressPushButton" type="button">Сохранить прогресс</button>
+                    <button class="ghost-button" id="githubProgressPullButton" type="button">Загрузить прогресс</button>
+                    <button class="ghost-button" id="githubConnectButton" type="button">OAuth позже</button>
                     <button class="primary-button" id="githubRepoEnableButton" type="button">Включить sync</button>
                     <button class="ghost-button" id="githubRepoDisableButton" type="button">Пауза sync</button>
+                    <button class="ghost-button danger-button" id="githubTokenClearButton" type="button">Забыть token</button>
                     <button class="ghost-button danger-button" id="githubDisconnectButton" type="button">Отключить</button>
                   </div>
                 </div>
+                <div class="repo-grid">
+                  <label class="repo-source">
+                    <span>GitHub owner</span>
+                    <input id="githubOwnerInput" placeholder="Lambdaderta" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                  </label>
+                  <label class="repo-source">
+                    <span>GitHub token</span>
+                    <input id="githubTokenInput" type="password" placeholder="github_pat_..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+                  </label>
+                </div>
                 <label class="repo-source">
-                  <span>Solutions repository</span>
+                  <span>Repository</span>
                   <input id="githubRepoInput" value="mlingo-solutions" autocomplete="off" autocapitalize="off" spellcheck="false" />
                 </label>
                 <div class="integration-how">
                   <strong>Как это будет работать</strong>
                   <ul>
-                    <li>Сейчас: GitHub используется для входа и привязки аккаунта.</li>
-                    <li id="githubRepoLine">Repo mode создаст или использует <code>mlingo-solutions</code>.</li>
-                    <li>После write/fix/idea задач решение пушится markdown-файлом и попадает в очередь review.</li>
-                    <li>Дискуссии и leaderboard останутся быстрыми через базу MLingo.</li>
+                    <li id="githubRepoLine">Serverless mode создаст или использует <code>mlingo-solutions</code>.</li>
+                    <li>Прогресс сохраняется в <code>progress/mlingo-progress.json</code>.</li>
+                    <li>После write/fix/idea задач решение пушится markdown-файлом в <code>solutions/</code>.</li>
+                    <li>Разборы и уведомления появятся позже, когда будет backend.</li>
                   </ul>
                 </div>
                 <div class="auth-hint" id="githubIntegrationMessage"></div>
+              </section>
+              <section class="update-panel">
+                <div class="lesson-meta">
+                  <div>
+                    <span class="eyebrow">Обновления</span>
+                    <h3>Версия MLingo</h3>
+                  </div>
+                  <span class="lesson-type" id="appVersionBadge">v0.1.1</span>
+                </div>
+                <p>Приложение проверяет GitHub Releases и показывает APK/macOS сборки, если вышла новая версия.</p>
+                <div class="pack-actions">
+                  <button class="primary-button" id="checkUpdatesButton" type="button">Проверить обновления</button>
+                  <a class="ghost-button link-button" id="releaseLink" href="https://github.com/Lambdaderta/mlingo/releases" target="_blank" rel="noreferrer">Открыть Releases</a>
+                </div>
+                <div class="feedback pack-status" id="updateStatus" hidden></div>
               </section>
               <section class="leaderboard-panel">
                 <div class="lesson-meta">

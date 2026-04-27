@@ -8,9 +8,11 @@ MLingo — темный offline-first тренажер для ручного ML-
 
 - PWA-интерфейс для desktop и mobile.
 - Оффлайн-профили и локальное сохранение прогресса.
+- Serverless GitHub sync: прогресс и решения можно сохранять в свой `mlingo-solutions` без backend.
 - Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, интеграций, синхронизации и leaderboard.
 - JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
 - Android APK через Capacitor.
+- macOS `.app` через нативный WKWebView wrapper.
 - GitHub Actions для проверок и публикации APK в GitHub Releases.
 - Типы упражнений: выбор ответа, порядок строк, пропуски, поиск бага, исправление кода, ручное написание кода и свободный разбор идеи.
 
@@ -86,6 +88,7 @@ python3 server.py --port 4180
 - `lesson-packs/` — внешние JSON-паки заданий.
 - `server.py` — backend API, аккаунты, PostgreSQL и leaderboard.
 - `android/` — Capacitor Android shell.
+- `macos/` — минимальная macOS оболочка.
 - `manifest.webmanifest` — настройки PWA.
 - `service-worker.js` — кэш и оффлайн-доступ.
 - `Dockerfile`, `docker-compose.yml` — локальный и production-запуск.
@@ -102,6 +105,10 @@ python3 server.py --port 4180
 - кэшировать загруженные packs в `localStorage`.
 
 Подробный формат описан в [docs/lesson-packs.md](docs/lesson-packs.md).
+
+## GitHub Sync без сервера
+
+В профиле можно подключить fine-grained GitHub token и сохранять прогресс/решения прямо в свой repo `mlingo-solutions`. Это работает без публичного backend и домена. Подробности: [docs/github-sync.md](docs/github-sync.md).
 
 ## Android APK
 
@@ -127,11 +134,27 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Публичный APK для тестеров публикуется через GitHub Releases:
 
 ```bash
-git tag -a v0.1.0 -m "MLingo v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "MLingo v0.1.1"
+git push origin v0.1.1
 ```
 
-Workflow `release-apk` соберет `MLingo-v0.1.0-debug.apk` и прикрепит его к Release. Подробности: [docs/apps.md](docs/apps.md).
+Workflow `release-apps` соберет Android APK и macOS zip, затем прикрепит их к Release. Подробности: [docs/apps.md](docs/apps.md).
+
+## macOS App
+
+Локальная сборка:
+
+```bash
+npm install
+npm run macos:build
+```
+
+Артефакты:
+
+```text
+dist/MLingo.app
+dist/MLingo-v0.1.1-macOS.zip
+```
 
 ## Деплой
 

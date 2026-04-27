@@ -2,6 +2,10 @@ const STORAGE_KEY = "mlingo.antivibe.progress.v6";
 const AUTH_TOKEN_KEY = "mlingo.auth.token";
 const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
+const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
+const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
+const APP_VERSION = "0.1.1";
+const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const LOCAL_USERS_KEY = "mlingo.local.users.v1";
 const LOCAL_CURRENT_USER_KEY = "mlingo.local.current_user.v1";
 const LOCAL_PROGRESS_PREFIX = "mlingo.local.progress.";
@@ -3434,8 +3438,14 @@ function cacheElements() {
     "githubIntegrationTitle",
     "githubIntegrationSubtitle",
     "githubConnectButton",
+    "githubTokenSaveButton",
+    "githubTokenClearButton",
+    "githubOwnerInput",
+    "githubTokenInput",
     "githubRepoEnableButton",
     "githubRepoDisableButton",
+    "githubProgressPushButton",
+    "githubProgressPullButton",
     "githubRepoInput",
     "githubDisconnectButton",
     "githubRepoLine",
@@ -3463,6 +3473,10 @@ function cacheElements() {
     "packSyncButton",
     "packSourceInput",
     "packStatus",
+    "appVersionBadge",
+    "checkUpdatesButton",
+    "releaseLink",
+    "updateStatus",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -3504,7 +3518,12 @@ function bindEvents() {
   els.githubConnectButton?.addEventListener("click", startGithubLogin);
   els.githubRepoEnableButton?.addEventListener("click", enableGithubRepoMode);
   els.githubRepoDisableButton?.addEventListener("click", disableGithubRepoMode);
+  els.githubTokenSaveButton?.addEventListener("click", saveGithubDirectSettings);
+  els.githubTokenClearButton?.addEventListener("click", clearGithubDirectSettings);
+  els.githubProgressPushButton?.addEventListener("click", pushProgressToGithubDirect);
+  els.githubProgressPullButton?.addEventListener("click", pullProgressFromGithubDirect);
   els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
+  els.checkUpdatesButton?.addEventListener("click", checkForUpdates);
   els.authUsername?.addEventListener("input", scheduleAuthChecks);
   els.authEmail?.addEventListener("input", scheduleAuthChecks);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
@@ -4319,6 +4338,8 @@ function renderLibrary() {
   if (els.packSourceInput) {
     els.packSourceInput.value = localStorage.getItem(PACK_SOURCE_STORAGE_KEY) || DEFAULT_PACK_INDEX_URL;
   }
+  if (els.appVersionBadge) els.appVersionBadge.textContent = `v${APP_VERSION}`;
+  renderGithubIntegration();
 }
 
 function renderStats() {
@@ -4452,10 +4473,82 @@ async function submitAuth(mode) {
 function startGithubLogin() {
   if (!runtimeConfig.githubOAuth) {
     showAuthStatus("GitHub-вход пока не настроен на сервере. Можно войти по логину/почте или создать локальный профиль.");
-    showGithubIntegrationMessage("GitHub OAuth не настроен на backend. Добавь GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET.", false);
+    showGithubIntegrationMessage("Backend OAuth не настроен. Для serverless sync используй GitHub token ниже.", false);
     return;
   }
   window.location.assign(`${API_BASE}/api/auth/github/start`);
+}
+
+async function saveGithubDirectSettings() {
+  const token = (els.githubTokenInput?.value || "").trim();
+  const repo = (els.githubRepoInput?.value || "mlingo-solutions").trim();
+  const ownerFromInput = (els.githubOwnerInput?.value || "").trim();
+  if (!repo) {
+    showGithubIntegrationMessage("Укажи название repo.");
+    return;
+  }
+  let owner = ownerFromInput;
+  if (token) {
+    localStorage.setItem(GITHUB_DIRECT_TOKEN_KEY, token);
+  }
+  const savedToken = getGithubDirectToken();
+  if (!savedToken) {
+    showGithubIntegrationMessage("Вставь GitHub token с Contents: Read and write.");
+    return;
+  }
+  try {
+    if (!owner) {
+      const me = await githubDirectRequest("/user");
+      owner = me.login;
+    }
+    saveGithubDirectConfig({ owner, repo, enabled: true });
+    if (els.githubTokenInput) els.githubTokenInput.value = "";
+    renderGithubIntegration();
+    showGithubIntegrationMessage(`Serverless sync подключен: ${owner}/${repo}.`, true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
+}
+
+function clearGithubDirectSettings() {
+  localStorage.removeItem(GITHUB_DIRECT_CONFIG_KEY);
+  localStorage.removeItem(GITHUB_DIRECT_TOKEN_KEY);
+  if (els.githubTokenInput) els.githubTokenInput.value = "";
+  renderGithubIntegration();
+  showGithubIntegrationMessage("Локальный GitHub token удален с этого устройства.", true);
+}
+
+async function enableGithubRepoMode() {
+  const direct = getGithubDirectConfig();
+  if (direct.enabled && getGithubDirectToken()) {
+    await pushProgressToGithubDirect();
+    return;
+  }
+  if (!currentUser?.github) {
+    startGithubLogin();
+    return;
+  }
+  if (!runtimeConfig.githubRepoWrite) {
+    showGithubIntegrationMessage("Backend OAuth сейчас без public_repo. Для режима без сервера вставь token выше.");
+    return;
+  }
+  if (!currentUser.github.canWriteRepo) {
+    showGithubIntegrationMessage("Нужно обновить права GitHub. Сейчас отправлю на OAuth с public_repo.", false);
+    startGithubLogin();
+    return;
+  }
+  const repoName = (els.githubRepoInput?.value || currentUser.github.repo?.name || "mlingo-solutions").trim();
+  try {
+    const data = await apiRequest("/api/github/repo/enable", {
+      method: "POST",
+      body: { repoName },
+    });
+    currentUser = data.user;
+    renderAuthUi();
+    showGithubIntegrationMessage(`Repo mode включен: ${data.repo?.fullName || repoName}.`, true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
 }
 
 async function disconnectGithub() {
@@ -4478,35 +4571,14 @@ async function disconnectGithub() {
   }
 }
 
-async function enableGithubRepoMode() {
-  if (!currentUser?.github) {
-    startGithubLogin();
-    return;
-  }
-  if (!runtimeConfig.githubRepoWrite) {
-    showGithubIntegrationMessage("Backend OAuth сейчас без public_repo. Добавь scope public_repo и перезапусти сервер.");
-    return;
-  }
-  if (!currentUser.github.canWriteRepo) {
-    showGithubIntegrationMessage("Нужно обновить права GitHub. Сейчас отправлю на OAuth с public_repo.", false);
-    startGithubLogin();
-    return;
-  }
-  const repoName = (els.githubRepoInput?.value || currentUser.github.repo?.name || "mlingo-solutions").trim();
-  try {
-    const data = await apiRequest("/api/github/repo/enable", {
-      method: "POST",
-      body: { repoName },
-    });
-    currentUser = data.user;
-    renderAuthUi();
-    showGithubIntegrationMessage(`Repo mode включен: ${data.repo?.fullName || repoName}.`, true);
-  } catch (error) {
-    showGithubIntegrationMessage(error.message);
-  }
-}
-
 async function disableGithubRepoMode() {
+  const direct = getGithubDirectConfig();
+  if (direct.enabled) {
+    saveGithubDirectConfig({ ...direct, enabled: false });
+    renderGithubIntegration();
+    showGithubIntegrationMessage("Serverless GitHub sync поставлен на паузу. Token остался на устройстве.", true);
+    return;
+  }
   if (!currentUser?.github) {
     showGithubIntegrationMessage("GitHub не подключен.", false);
     return;
@@ -4816,15 +4888,22 @@ function renderAuthUi() {
 
 function renderGithubIntegration() {
   if (!els.githubIntegrationPanel) return;
+  const direct = getGithubDirectConfig();
+  const directToken = Boolean(getGithubDirectToken());
+  const directReady = Boolean(direct.enabled && directToken);
   const connected = Boolean(currentUser?.github);
   const repoEnabled = Boolean(currentUser?.github?.repo?.enabled);
   const canWrite = Boolean(currentUser?.github?.canWriteRepo && runtimeConfig.githubRepoWrite);
-  els.githubIntegrationPanel.classList.toggle("is-connected", connected);
-  els.githubIntegrationPanel.classList.toggle("is-syncing", repoEnabled);
-  els.githubIntegrationPanel.classList.toggle("is-disabled", !runtimeConfig.githubOAuth && !connected);
-  els.githubIntegrationMark.textContent = repoEnabled ? "↗" : connected ? "✓" : "GH";
-  els.githubIntegrationTitle.textContent = repoEnabled ? "Solutions repo включен" : connected ? "Подключен к GitHub" : "GitHub не подключен";
-  if (repoEnabled) {
+  els.githubIntegrationPanel.classList.toggle("is-connected", connected || directToken);
+  els.githubIntegrationPanel.classList.toggle("is-syncing", repoEnabled || directReady);
+  els.githubIntegrationPanel.classList.toggle("is-disabled", !runtimeConfig.githubOAuth && !connected && !directToken);
+  els.githubIntegrationMark.textContent = repoEnabled || directReady ? "↗" : connected || directToken ? "✓" : "GH";
+  els.githubIntegrationTitle.textContent = directReady ? "Serverless GitHub sync включен" : repoEnabled ? "Solutions repo включен" : connected ? "Подключен к GitHub" : directToken ? "Token сохранен" : "GitHub не подключен";
+  if (directReady) {
+    els.githubIntegrationSubtitle.textContent = `${direct.owner || "owner"}/${direct.repo || "mlingo-solutions"}`;
+  } else if (directToken) {
+    els.githubIntegrationSubtitle.textContent = "Token есть, нажми “Сохранить token” или “Сохранить прогресс”.";
+  } else if (repoEnabled) {
     els.githubIntegrationSubtitle.textContent = currentUser.github.repo?.fullName || currentUser.github.repo?.name || "mlingo-solutions";
   } else if (connected && !canWrite) {
     els.githubIntegrationSubtitle.textContent = runtimeConfig.githubRepoWrite ? "Нужно обновить GitHub-права для записи решений." : "Backend OAuth пока без public_repo.";
@@ -4833,18 +4912,25 @@ function renderGithubIntegration() {
   } else if (runtimeConfig.githubOAuth) {
     els.githubIntegrationSubtitle.textContent = currentUser ? "Можно привязать GitHub к текущему аккаунту." : "Войди через GitHub или привяжи его после регистрации.";
   } else {
-    els.githubIntegrationSubtitle.textContent = "OAuth еще не настроен на сервере.";
+    els.githubIntegrationSubtitle.textContent = "Вставь GitHub token для режима без сервера.";
   }
   if (els.githubConnectButton) els.githubConnectButton.hidden = connected || !runtimeConfig.githubOAuth;
+  if (els.githubTokenClearButton) els.githubTokenClearButton.hidden = !directToken;
+  if (els.githubProgressPushButton) els.githubProgressPushButton.hidden = !directToken;
+  if (els.githubProgressPullButton) els.githubProgressPullButton.hidden = !directToken;
   if (els.githubRepoEnableButton) {
-    els.githubRepoEnableButton.hidden = !connected || repoEnabled;
-    els.githubRepoEnableButton.disabled = !runtimeConfig.githubRepoWrite;
-    els.githubRepoEnableButton.textContent = canWrite ? "Включить sync" : "Дать write-доступ";
+    els.githubRepoEnableButton.hidden = directReady || repoEnabled || (!connected && !directToken);
+    els.githubRepoEnableButton.disabled = connected && !directToken && !runtimeConfig.githubRepoWrite;
+    els.githubRepoEnableButton.textContent = directToken ? "Включить sync" : canWrite ? "Включить sync" : "Дать write-доступ";
   }
-  if (els.githubRepoDisableButton) els.githubRepoDisableButton.hidden = !repoEnabled;
+  if (els.githubRepoDisableButton) els.githubRepoDisableButton.hidden = !repoEnabled && !directReady;
+  if (els.githubOwnerInput) {
+    els.githubOwnerInput.value = direct.owner || els.githubOwnerInput.value || currentUser?.github?.login || "";
+    els.githubOwnerInput.disabled = directReady;
+  }
   if (els.githubRepoInput) {
-    els.githubRepoInput.value = currentUser?.github?.repo?.name || els.githubRepoInput.value || "mlingo-solutions";
-    els.githubRepoInput.disabled = !connected || repoEnabled;
+    els.githubRepoInput.value = direct.repo || currentUser?.github?.repo?.name || els.githubRepoInput.value || "mlingo-solutions";
+    els.githubRepoInput.disabled = repoEnabled || directReady;
   }
   if (els.githubDisconnectButton) els.githubDisconnectButton.hidden = !connected;
   if (els.githubDisconnectButton) {
@@ -4852,10 +4938,12 @@ function renderGithubIntegration() {
     els.githubDisconnectButton.title = connected && !currentUser.hasPassword ? "Нельзя отключить единственный способ входа" : "";
   }
   if (els.githubRepoLine) {
-    const fullName = currentUser?.github?.repo?.fullName || `${currentUser?.github?.login || currentUser?.username || "username"}/${currentUser?.github?.repo?.name || "mlingo-solutions"}`;
-    els.githubRepoLine.innerHTML = connected
-      ? `Repo mode ${repoEnabled ? "пушит" : "будет пушить"} решения в <code>${escapeHtml(fullName)}</code>.`
-      : "Дальше: MLingo сможет пушить решения в твой репозиторий.";
+    const fullName = directReady
+      ? `${direct.owner}/${direct.repo}`
+      : currentUser?.github?.repo?.fullName || `${currentUser?.github?.login || currentUser?.username || "username"}/${currentUser?.github?.repo?.name || "mlingo-solutions"}`;
+    els.githubRepoLine.innerHTML = connected || directToken
+      ? `Repo mode ${repoEnabled || directReady ? "пушит" : "будет пушить"} прогресс и решения в <code>${escapeHtml(fullName)}</code>.`
+      : "Serverless mode будет пушить прогресс и решения в твой GitHub repo.";
   }
 }
 
@@ -4863,6 +4951,246 @@ function showGithubIntegrationMessage(text, good = false) {
   if (!els.githubIntegrationMessage) return;
   els.githubIntegrationMessage.textContent = text || "";
   els.githubIntegrationMessage.className = `auth-hint ${good ? "is-good" : text ? "is-bad" : ""}`;
+}
+
+function getGithubDirectToken() {
+  return localStorage.getItem(GITHUB_DIRECT_TOKEN_KEY) || "";
+}
+
+function getGithubDirectConfig() {
+  try {
+    return {
+      owner: "",
+      repo: "mlingo-solutions",
+      enabled: false,
+      ...(JSON.parse(localStorage.getItem(GITHUB_DIRECT_CONFIG_KEY)) || {}),
+    };
+  } catch {
+    return { owner: "", repo: "mlingo-solutions", enabled: false };
+  }
+}
+
+function saveGithubDirectConfig(config) {
+  localStorage.setItem(GITHUB_DIRECT_CONFIG_KEY, JSON.stringify(config));
+}
+
+async function githubDirectRequest(path, options = {}) {
+  const token = getGithubDirectToken();
+  if (!token) throw new Error("GitHub token не сохранен на устройстве.");
+  const response = await fetch(`https://api.github.com${path}`, {
+    method: options.method || "GET",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (options.allow404 && response.status === 404) return null;
+  if (!response.ok) throw new Error(data.message || `GitHub API вернул ${response.status}`);
+  return data;
+}
+
+function encodeBase64Utf8(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function decodeBase64Utf8(value) {
+  const clean = String(value || "").replace(/\s/g, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new TextDecoder().decode(bytes);
+}
+
+function normalizeRepoNameClient(value) {
+  const repo = String(value || "mlingo-solutions").trim();
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(repo)) throw new Error("Repo: только буквы, цифры, точка, _ или -.");
+  return repo;
+}
+
+async function ensureGithubDirectRepo() {
+  const config = getGithubDirectConfig();
+  const repo = normalizeRepoNameClient(els.githubRepoInput?.value || config.repo);
+  let owner = (els.githubOwnerInput?.value || config.owner || "").trim();
+  if (!owner) {
+    const me = await githubDirectRequest("/user");
+    owner = me.login;
+  }
+  const encodedOwner = encodeURIComponent(owner);
+  const encodedRepo = encodeURIComponent(repo);
+  const existing = await githubDirectRequest(`/repos/${encodedOwner}/${encodedRepo}`, { allow404: true });
+  if (existing) {
+    saveGithubDirectConfig({ ...config, owner, repo, fullName: existing.full_name, url: existing.html_url, enabled: true });
+    return existing;
+  }
+  const created = await githubDirectRequest("/user/repos", {
+    method: "POST",
+    body: {
+      name: repo,
+      description: "MLingo progress and solutions.",
+      private: false,
+      auto_init: true,
+    },
+  });
+  saveGithubDirectConfig({ ...config, owner, repo, fullName: created.full_name, url: created.html_url, enabled: true });
+  return created;
+}
+
+function githubProgressPayload() {
+  return {
+    schema: 1,
+    app: "MLingo",
+    appVersion: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    state,
+  };
+}
+
+async function putGithubDirectFile(filePath, content, message) {
+  const repo = await ensureGithubDirectRepo();
+  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+  const current = await githubDirectRequest(`/repos/${repo.full_name}/contents/${encodedPath}`, { allow404: true });
+  const payload = {
+    message,
+    content: encodeBase64Utf8(content),
+  };
+  if (current?.sha) payload.sha = current.sha;
+  const result = await githubDirectRequest(`/repos/${repo.full_name}/contents/${encodedPath}`, {
+    method: "PUT",
+    body: payload,
+  });
+  return { repo, result };
+}
+
+async function pushProgressToGithubDirect(options = {}) {
+  try {
+    const { repo } = await putGithubDirectFile(
+      "progress/mlingo-progress.json",
+      JSON.stringify(githubProgressPayload(), null, 2),
+      "Update MLingo progress",
+    );
+    renderGithubIntegration();
+    if (!options.silent) showGithubIntegrationMessage(`Прогресс сохранен в ${repo.full_name}/progress/mlingo-progress.json.`, true);
+    return true;
+  } catch (error) {
+    if (!options.silent) showGithubIntegrationMessage(error.message);
+    return false;
+  }
+}
+
+async function pullProgressFromGithubDirect() {
+  try {
+    const repo = await ensureGithubDirectRepo();
+    const current = await githubDirectRequest(`/repos/${repo.full_name}/contents/progress/mlingo-progress.json`, { allow404: true });
+    if (!current?.content) throw new Error("В repo пока нет progress/mlingo-progress.json.");
+    const remote = JSON.parse(decodeBase64Utf8(current.content));
+    if (!remote?.state) throw new Error("Файл прогресса есть, но формат не похож на MLingo.");
+    mergeRemoteProgress({ state: remote.state, xp: remote.state.xp, streak: remote.state.streak });
+    saveState();
+    renderAll();
+    showGithubIntegrationMessage(`Прогресс загружен из ${repo.full_name}.`, true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
+}
+
+function buildDirectSolutionMarkdown(lesson, topic, answer) {
+  const checklist = (lesson.rubric || []).map((item) => item.label).filter(Boolean);
+  const fallback = [
+    "Проверь validation и отсутствие leakage.",
+    "Проверь shape/dtype/device контракты.",
+    "Проверь читаемость и воспроизводимость.",
+  ];
+  const language = lesson.kind === "idea" ? "markdown" : "python";
+  const fence = answer.includes("```") ? "````" : "```";
+  return `# ${lesson.title}
+
+- Тема: ${topic.title}
+- Тип задания: ${lesson.kind}
+- Экспортировано: ${new Date().toISOString()}
+- Версия MLingo: ${APP_VERSION}
+
+## Условие
+
+${lesson.prompt}
+
+## Решение
+
+${fence}${language}
+${answer}
+${fence}
+
+## Review checklist
+
+${(checklist.length ? checklist : fallback).map((item) => `- ${item}`).join("\n")}
+`;
+}
+
+function slugifyClient(value, fallback = "item") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || fallback;
+}
+
+async function syncSolutionToGithubDirect(lesson, topic, answer) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z");
+  const path = `solutions/${slugifyClient(lesson.id, "lesson")}/${stamp}.md`;
+  const { repo } = await putGithubDirectFile(
+    path,
+    buildDirectSolutionMarkdown(lesson, topic, answer),
+    `Add MLingo solution for ${lesson.id}`,
+  );
+  return `${repo.full_name}/${path}`;
+}
+
+function compareVersions(a, b) {
+  const left = String(a || "0").replace(/^v/, "").split(".").map(Number);
+  const right = String(b || "0").replace(/^v/, "").split(".").map(Number);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] || 0) - (right[index] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
+  if (!els.updateStatus) return;
+  els.updateStatus.hidden = false;
+  els.updateStatus.className = "feedback pack-status";
+  els.updateStatus.textContent = "Проверяю GitHub Releases...";
+  try {
+    const response = await fetch(RELEASES_API_URL, { cache: "no-cache" });
+    if (!response.ok) throw new Error(`GitHub Releases вернул ${response.status}`);
+    const release = await response.json();
+    const latest = String(release.tag_name || "").replace(/^v/, "");
+    const apk = (release.assets || []).find((asset) => asset.name.endsWith(".apk"));
+    const mac = (release.assets || []).find((asset) => asset.name.toLowerCase().includes("macos") && asset.name.endsWith(".zip"));
+    const newer = compareVersions(latest, APP_VERSION) > 0;
+    if (els.releaseLink && release.html_url) els.releaseLink.href = release.html_url;
+    const links = [
+      apk ? `<a href="${escapeHtml(apk.browser_download_url)}" target="_blank" rel="noreferrer">Android APK</a>` : "",
+      mac ? `<a href="${escapeHtml(mac.browser_download_url)}" target="_blank" rel="noreferrer">macOS app</a>` : "",
+    ].filter(Boolean);
+    els.updateStatus.className = `feedback pack-status ${newer ? "is-good" : ""}`;
+    els.updateStatus.innerHTML = newer
+      ? `Доступна версия v${escapeHtml(latest)}. ${links.join(" · ") || `<a href="${escapeHtml(release.html_url)}" target="_blank" rel="noreferrer">Открыть Release</a>`}`
+      : `У тебя актуальная версия v${APP_VERSION}. Последний release: v${escapeHtml(latest || APP_VERSION)}.`;
+  } catch (error) {
+    els.updateStatus.className = "feedback pack-status is-bad";
+    els.updateStatus.textContent = `Не смог проверить обновления: ${error.message}`;
+  }
 }
 
 function appendFeedbackNote(text, good = true) {
@@ -4881,11 +5209,28 @@ function captureSolutionAnswer(lesson) {
 }
 
 async function syncSolutionIfEnabled(lesson, firstPass) {
-  if (!firstPass || !solutionEligible(lesson)) return;
-  if (!currentUser?.github?.repo?.enabled || currentUser.local) return;
+  if (!firstPass) return;
+  const topic = getCurrentTopic();
+  const direct = getGithubDirectConfig();
+  if (direct.enabled && getGithubDirectToken()) {
+    await pushProgressToGithubDirect({ silent: true });
+    if (!solutionEligible(lesson)) return;
+    const answer = captureSolutionAnswer(lesson).trim();
+    if (!answer) return;
+    try {
+      const location = await syncSolutionToGithubDirect(lesson, topic, answer);
+      appendFeedbackNote(`Решение сохранено в GitHub: ${location}.`, true);
+      showGithubIntegrationMessage("Решение ушло в GitHub. Review появится позже, когда подключим backend.", true);
+    } catch (error) {
+      appendFeedbackNote(`GitHub sync не прошёл: ${error.message}`, false);
+      showGithubIntegrationMessage(error.message);
+    }
+    return;
+  }
+  if (!solutionEligible(lesson)) return;
   const answer = captureSolutionAnswer(lesson).trim();
   if (!answer) return;
-  const topic = getCurrentTopic();
+  if (!currentUser?.github?.repo?.enabled || currentUser.local) return;
   try {
     const data = await apiRequest("/api/github/solutions", {
       method: "POST",

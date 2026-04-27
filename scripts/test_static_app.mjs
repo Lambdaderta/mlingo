@@ -24,6 +24,7 @@ const app = read("app.js");
 const server = read("server.py");
 const sw = read("service-worker.js");
 const mainActivity = read("android/app/src/main/java/io/mlingo/app/MainActivity.java");
+const macosApp = read("macos/MLingoApp.m");
 const packageJson = readJson("package.json");
 const capacitorConfig = readJson("capacitor.config.json");
 const packIndex = readJson("lesson-packs/index.json");
@@ -36,6 +37,8 @@ assert.ok(html.includes('id="packImportButton"'), "index.html should include pac
 assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
 assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should include GitHub integrations panel");
 assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
+assert.ok(html.includes('id="githubTokenInput"'), "index.html should include serverless GitHub token input");
+assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include update checker button");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -70,6 +73,8 @@ assert.ok(app.includes("function startGithubLogin"), "app should include GitHub 
 assert.ok(app.includes("async function disconnectGithub"), "app should include GitHub disconnect flow");
 assert.ok(app.includes("async function enableGithubRepoMode"), "app should include GitHub repo mode enable flow");
 assert.ok(app.includes("async function syncSolutionIfEnabled"), "app should sync eligible solutions");
+assert.ok(app.includes("async function pushProgressToGithubDirect"), "app should push progress to GitHub without backend");
+assert.ok(app.includes("async function checkForUpdates"), "app should check GitHub Releases for updates");
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
@@ -84,6 +89,7 @@ assert.ok(server.includes("create table if not exists solutions"), "server shoul
 assert.ok(server.includes("/api/config"), "server should expose runtime config endpoint");
 assert.ok(mainActivity.includes("SYSTEM_UI_FLAG_IMMERSIVE_STICKY"), "Android app should hide navigation bars on older devices");
 assert.ok(mainActivity.includes("WindowInsets.Type.navigationBars"), "Android app should hide navigation bars on modern devices");
+assert.ok(macosApp.includes("WKWebView"), "macOS app should embed the web app in WKWebView");
 assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 
 assert.equal(capacitorConfig.appId, "io.mlingo.app", "Capacitor appId should be stable");
@@ -91,11 +97,11 @@ assert.equal(capacitorConfig.appName, "MLingo", "Capacitor appName should be sta
 assert.equal(capacitorConfig.webDir, "web", "Capacitor webDir should be web");
 assert.equal(capacitorConfig.server?.androidScheme, "https", "Capacitor Android scheme should be https");
 
-for (const script of ["test", "test:server", "test:lessons", "test:static", "test:web", "test:site", "check", "android:debug", "android:test", "cap:prepare"]) {
+for (const script of ["test", "test:server", "test:lessons", "test:static", "test:web", "test:site", "check", "android:debug", "android:test", "macos:build", "cap:prepare"]) {
   assert.ok(packageJson.scripts?.[script], `package.json should define ${script}`);
 }
 
-for (const doc of ["docs/apps.md", "docs/lesson-packs.md", "docs/deploy.md", "docs/allowed-libraries.md"]) {
+for (const doc of ["docs/apps.md", "docs/lesson-packs.md", "docs/deploy.md", "docs/allowed-libraries.md", "docs/github-sync.md"]) {
   assert.ok(fs.existsSync(path.join(root, doc)), `${doc} should exist`);
 }
 

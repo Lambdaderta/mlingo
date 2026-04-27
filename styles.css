@@ -918,6 +918,12 @@ textarea:focus-visible {
   gap: 0.35rem;
 }
 
+.repo-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 0.75rem;
+}
+
 .repo-source span {
   color: var(--muted);
   font-size: 0.78rem;
@@ -979,6 +985,28 @@ textarea:focus-visible {
 
 .feedback-note.is-bad {
   color: #e38b7d;
+}
+
+.update-panel {
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 1rem;
+}
+
+.update-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .library-grid {
@@ -1302,6 +1330,7 @@ body.focus-mode .screen-stack {
 
   .stat-grid,
   .profile-grid,
+  .repo-grid,
   .boss-grid,
   .library-grid {
     grid-template-columns: 1fr;

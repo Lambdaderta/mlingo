@@ -1,6 +1,6 @@
 # Приложения MLingo
 
-MLingo работает как offline-first web app и может быть упакован в нативную оболочку для Android через Capacitor.
+MLingo работает как offline-first web app и может быть упакован в нативные оболочки для Android и macOS.
 
 ## Архитектура
 
@@ -8,11 +8,13 @@ MLingo работает как offline-first web app и может быть уп
 Frontend: index.html + app.js + styles.css
 Банк заданий: встроенные уроки + lesson-packs/*.json
 Локальный прогресс: localStorage
-Облачный прогресс: Python API + PostgreSQL
+GitHub-прогресс без сервера: local token + GitHub Contents API
+Облачный прогресс позже: Python API + PostgreSQL
 Android: Capacitor wrapper с immersive mode
+macOS: Swift WKWebView wrapper
 ```
 
-Приложение остается работоспособным без сети. Сейчас можно использовать локальные оффлайн-профили; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
+Приложение остается работоспособным без сети. Сейчас можно использовать локальные оффлайн-профили и serverless GitHub sync; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
 
 ## Android APK
 
@@ -61,40 +63,48 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 При открытии APK приложение включает fullscreen/immersive mode. Системные кнопки “домой/назад” и панели Android скрываются до свайпа от края экрана.
 
-## GitHub Releases для APK
+## macOS App
 
-APK не нужно хранить в git. В репе есть workflow `.github/workflows/release-apk.yml`: он собирает Android debug APK и прикрепляет его к GitHub Release.
+Локальная сборка:
+
+```bash
+npm install
+npm run macos:build
+```
+
+Результат:
+
+```text
+dist/MLingo.app
+dist/MLingo-v0.1.1-macOS.zip
+```
+
+Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
+
+## GitHub Releases для приложений
+
+APK и macOS zip не нужно хранить в git. Workflow `.github/workflows/release-apk.yml` публикует оба артефакта в GitHub Release.
 
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.0 -m "MLingo v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "MLingo v0.1.1"
+git push origin v0.1.1
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.0 -> Assets -> MLingo-v0.1.0-debug.apk
+GitHub repo -> Releases -> v0.1.1 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apk -> Run workflow`, вписать tag, например `v0.1.0`, и workflow перезальет APK в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.1`, и workflow перезальет APK/macOS zip в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 
-## Варианты для macOS
+## Проверка обновлений
 
-Самый быстрый вариант — установить PWA из Chrome или Safari после деплоя сайта на HTTPS. Приложение будет кэшировать интерфейс, задания и локальный прогресс.
-
-Варианты нативной оболочки:
-
-```text
-1. Tauri: легкое desktop-приложение, хороший долгосрочный вариант.
-2. Electron: проще всего, если нужны Node API, но бинарник тяжелее.
-3. WKWebView Swift shell: минимальная нативная оболочка, больше ручной работы.
-```
-
-Рекомендуемый порядок: сначала PWA и Android APK, затем Tauri, если понадобится полноценный `.app` bundle.
+В профиле есть блок `Обновления`. Он читает `https://api.github.com/repos/Lambdaderta/mlingo/releases/latest`, сравнивает версию приложения с последним tag и показывает ссылки на APK/macOS assets.
 
 ## Синхронизация заданий из GitHub
 

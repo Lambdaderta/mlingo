@@ -1,4 +1,4 @@
-name: release-apk
+name: release-apps
 
 on:
   push:
@@ -61,3 +61,35 @@ jobs:
           else
             gh release create "$RELEASE_TAG" "${{ steps.apk.outputs.path }}#MLingo Android APK (debug)" --verify-tag --generate-notes
           fi
+
+  macos-app:
+    runs-on: macos-14
+    needs: android-apk
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run macos:build
+
+      - id: macos
+        run: |
+          mkdir -p dist
+          VERSION="$(node -p "require('./package.json').version")"
+          SOURCE="dist/MLingo-v${VERSION}-macOS.zip"
+          TARGET="dist/MLingo-${RELEASE_TAG}-macOS.zip"
+          cp "$SOURCE" "$TARGET"
+          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Upload macOS app to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "${{ steps.macos.outputs.path }}#MLingo macOS app" --clobber

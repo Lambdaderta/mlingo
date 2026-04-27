@@ -1,6 +1,6 @@
 {
   "name": "mlingo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Offline-first ML coding trainer.",
   "scripts": {
@@ -19,7 +19,8 @@
     "android:add": "npm run cap:prepare && cap add android",
     "android:debug": "npm run cap:prepare && cap sync android && cd android && ./gradlew assembleDebug",
     "android:test": "npm run cap:prepare && cap sync android && cd android && ./gradlew testDebugUnitTest",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "macos:build": "bash scripts/build_macos_app.sh"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
