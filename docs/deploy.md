@@ -125,7 +125,8 @@ MLingo поддерживает GitHub OAuth как способ входа, п�
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 GITHUB_OAUTH_REDIRECT_URI=https://mlingo.app/api/auth/github/callback
-GITHUB_OAUTH_SCOPES=read:user user:email
+GITHUB_OAUTH_SCOPES=read:user user:email public_repo
+GITHUB_SOLUTIONS_REPO_NAME=mlingo-solutions
 ```
 
 Для локальной разработки callback:
@@ -134,7 +135,9 @@ GITHUB_OAUTH_SCOPES=read:user user:email
 http://localhost:4180/api/auth/github/callback
 ```
 
-Идею “коммитить каждую решенную задачу в GitHub” лучше включать позже отдельным opt-in режимом. Для этого понадобится GitHub App или OAuth с write-доступом, явное согласие пользователя и настройка репозитория, куда писать ledger прогресса.
+Repo mode работает отдельным opt-in: пользователь включает sync в профиле, MLingo создает или использует публичный repo `mlingo-solutions`, а затем пушит туда markdown-файлы решений для `write`, `fix` и `idea` задач. Эти записи также попадают в backend-очередь `queued_for_review`, чтобы позже поверх нее сделать peer review и дискуссии.
+
+Важно: `public_repo` дает приложению право писать в публичные репозитории пользователя. Храни базу и `DATABASE_URL` как секреты, потому что write-token сохраняется в PostgreSQL только для repo mode. Если захочется приватные репозитории, нужен scope `repo`, но для старта лучше публичный `mlingo-solutions`.
 
 ## Перед публичным запуском
 

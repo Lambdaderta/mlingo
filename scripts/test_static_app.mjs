@@ -23,6 +23,7 @@ const html = read("index.html");
 const app = read("app.js");
 const server = read("server.py");
 const sw = read("service-worker.js");
+const mainActivity = read("android/app/src/main/java/io/mlingo/app/MainActivity.java");
 const packageJson = readJson("package.json");
 const capacitorConfig = readJson("capacitor.config.json");
 const packIndex = readJson("lesson-packs/index.json");
@@ -34,6 +35,7 @@ assert.ok(html.includes('id="packExportButton"'), "index.html should include pac
 assert.ok(html.includes('id="packImportButton"'), "index.html should include pack import button");
 assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
 assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should include GitHub integrations panel");
+assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -66,6 +68,8 @@ assert.ok(app.includes("async function syncLessonPacksFromGithub"), "app should 
 assert.ok(app.includes("async function loadRuntimeConfig"), "app should load runtime backend config");
 assert.ok(app.includes("function startGithubLogin"), "app should include GitHub login flow");
 assert.ok(app.includes("async function disconnectGithub"), "app should include GitHub disconnect flow");
+assert.ok(app.includes("async function enableGithubRepoMode"), "app should include GitHub repo mode enable flow");
+assert.ok(app.includes("async function syncSolutionIfEnabled"), "app should sync eligible solutions");
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
@@ -74,7 +78,12 @@ assert.ok(app.includes("function saveLocalProgressForUser"), "app should save lo
 assert.ok(server.includes("/api/auth/github/start"), "server should expose GitHub OAuth start endpoint");
 assert.ok(server.includes("/api/auth/github/callback"), "server should expose GitHub OAuth callback endpoint");
 assert.ok(server.includes("/api/auth/github/disconnect"), "server should expose GitHub OAuth disconnect endpoint");
+assert.ok(server.includes("/api/github/repo/enable"), "server should expose GitHub repo mode endpoint");
+assert.ok(server.includes("/api/github/solutions"), "server should expose GitHub solution sync endpoint");
+assert.ok(server.includes("create table if not exists solutions"), "server should persist review queue solutions");
 assert.ok(server.includes("/api/config"), "server should expose runtime config endpoint");
+assert.ok(mainActivity.includes("SYSTEM_UI_FLAG_IMMERSIVE_STICKY"), "Android app should hide navigation bars on older devices");
+assert.ok(mainActivity.includes("WindowInsets.Type.navigationBars"), "Android app should hide navigation bars on modern devices");
 assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 
 assert.equal(capacitorConfig.appId, "io.mlingo.app", "Capacitor appId should be stable");

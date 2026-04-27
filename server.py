@@ -9,12 +9,12 @@ import os
 import re
 import secrets
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 import psycopg
@@ -30,12 +30,14 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "").strip()
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "").strip()
 GITHUB_OAUTH_REDIRECT_URI = os.environ.get("GITHUB_OAUTH_REDIRECT_URI", "").strip()
-GITHUB_OAUTH_SCOPES = os.environ.get("GITHUB_OAUTH_SCOPES", "read:user user:email").strip()
+GITHUB_OAUTH_SCOPES = os.environ.get("GITHUB_OAUTH_SCOPES", "read:user user:email public_repo").strip()
+GITHUB_SOLUTIONS_REPO_NAME = os.environ.get("GITHUB_SOLUTIONS_REPO_NAME", "mlingo-solutions").strip()
 GITHUB_STATE_COOKIE = "mlingo_github_state"
 GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_API_URL = "https://api.github.com"
 OAUTH_STATE_TTL = 60 * 10
+REPO_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 
 def now_ts():
@@ -44,6 +46,10 @@ def now_ts():
 
 def json_dumps(data):
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def utc_stamp():
+    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
 
 def db_connect():
@@ -63,6 +69,12 @@ def init_db():
               github_id bigint,
               github_login text,
               github_avatar_url text,
+              github_access_token text,
+              github_scope text,
+              github_repo_name text not null default 'mlingo-solutions',
+              github_repo_full_name text,
+              github_repo_enabled boolean not null default false,
+              github_repo_connected_at bigint,
               created_at bigint not null
             )
             """
@@ -73,6 +85,12 @@ def init_db():
         db.execute("alter table users add column if not exists github_id bigint")
         db.execute("alter table users add column if not exists github_login text")
         db.execute("alter table users add column if not exists github_avatar_url text")
+        db.execute("alter table users add column if not exists github_access_token text")
+        db.execute("alter table users add column if not exists github_scope text")
+        db.execute("alter table users add column if not exists github_repo_name text not null default 'mlingo-solutions'")
+        db.execute("alter table users add column if not exists github_repo_full_name text")
+        db.execute("alter table users add column if not exists github_repo_enabled boolean not null default false")
+        db.execute("alter table users add column if not exists github_repo_connected_at bigint")
         db.execute(
             """
             create table if not exists sessions (
@@ -108,9 +126,31 @@ def init_db():
             )
             """
         )
+        db.execute(
+            """
+            create table if not exists solutions (
+              id bigserial primary key,
+              user_id bigint not null references users(id) on delete cascade,
+              lesson_id text not null,
+              lesson_title text not null,
+              topic_id text,
+              topic_title text,
+              kind text not null,
+              answer_text text not null,
+              github_repo text,
+              github_path text,
+              github_commit_sha text,
+              github_html_url text,
+              status text not null default 'queued_for_review',
+              created_at bigint not null
+            )
+            """
+        )
         db.execute("create index if not exists sessions_user_id_idx on sessions(user_id)")
         db.execute("create index if not exists sessions_expires_at_idx on sessions(expires_at)")
         db.execute("create index if not exists events_user_created_idx on events(user_id, created_at desc)")
+        db.execute("create index if not exists solutions_created_idx on solutions(created_at desc)")
+        db.execute("create index if not exists solutions_lesson_idx on solutions(lesson_id, created_at desc)")
         db.execute("create index if not exists progress_leaderboard_idx on progress(xp desc, streak desc, completed_count desc, updated_at asc)")
         db.execute("create unique index if not exists users_email_lower_unique_idx on users (lower(email)) where email is not null")
         db.execute("create unique index if not exists users_github_id_unique_idx on users (github_id) where github_id is not null")
@@ -194,10 +234,19 @@ def public_user(row):
         "createdAt": row["created_at"],
     }
     if row.get("github_id"):
+        repo_name = row.get("github_repo_name") or GITHUB_SOLUTIONS_REPO_NAME
+        repo_full_name = row.get("github_repo_full_name") or (f"{row.get('github_login')}/{repo_name}" if row.get("github_login") else None)
         user["github"] = {
             "id": row.get("github_id"),
             "login": row.get("github_login"),
             "avatarUrl": row.get("github_avatar_url"),
+            "canWriteRepo": github_has_repo_scope(row.get("github_scope")),
+            "repo": {
+                "enabled": bool(row.get("github_repo_enabled")),
+                "name": repo_name,
+                "fullName": repo_full_name,
+                "url": f"https://github.com/{repo_full_name}" if repo_full_name else None,
+            },
         }
     return user
 
@@ -290,6 +339,22 @@ def github_oauth_configured():
     return bool(GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET)
 
 
+def github_has_repo_scope(scope_text):
+    scopes = {item for item in re.split(r"[\s,]+", str(scope_text or "")) if item}
+    return "repo" in scopes or "public_repo" in scopes
+
+
+def github_repo_write_configured():
+    return github_has_repo_scope(GITHUB_OAUTH_SCOPES)
+
+
+def normalize_repo_name(value):
+    repo_name = str(value or GITHUB_SOLUTIONS_REPO_NAME or "mlingo-solutions").strip()
+    if not REPO_NAME_RE.match(repo_name):
+        raise ValueError("Название GitHub repo должно содержать только буквы, цифры, точку, _ или -")
+    return repo_name
+
+
 def github_json_request(url, token=None, data=None):
     headers = {
         "Accept": "application/vnd.github+json",
@@ -311,6 +376,113 @@ def github_json_request(url, token=None, data=None):
         raise RuntimeError(f"GitHub вернул {exc.code}: {detail[:180]}") from exc
     except URLError as exc:
         raise RuntimeError(f"GitHub недоступен: {exc.reason}") from exc
+
+
+def github_api_request(method, api_path, token, payload=None, allow_404=False):
+    url = api_path if api_path.startswith("http") else f"{GITHUB_API_URL}{api_path}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "MLingo",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Authorization": f"Bearer {token}",
+    }
+    raw_data = None
+    if payload is not None:
+        raw_data = json_dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = Request(url, data=raw_data, headers=headers, method=method)
+    try:
+        with urlopen(request, timeout=18) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if allow_404 and exc.code == 404:
+            return None
+        raise RuntimeError(f"GitHub вернул {exc.code}: {detail[:180]}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"GitHub недоступен: {exc.reason}") from exc
+
+
+def ensure_github_repo(user, repo_name):
+    access_token = user.get("github_access_token")
+    if not user.get("github_login") or not access_token:
+        raise ValueError("GitHub подключен без write-token. Переподключи GitHub с правом public_repo")
+    if not github_has_repo_scope(user.get("github_scope")):
+        raise ValueError("Для repo mode нужен scope public_repo или repo")
+    repo_name = normalize_repo_name(repo_name)
+    owner = user["github_login"]
+    existing = github_api_request("GET", f"/repos/{quote(owner)}/{quote(repo_name)}", access_token, allow_404=True)
+    if existing:
+        return existing
+    return github_api_request(
+        "POST",
+        "/user/repos",
+        access_token,
+        {
+            "name": repo_name,
+            "description": "MLingo solutions exported from practice sessions.",
+            "private": False,
+            "auto_init": True,
+        },
+    )
+
+
+def put_github_solution_file(user, repo_full_name, path, content, message):
+    access_token = user.get("github_access_token")
+    if not access_token:
+        raise ValueError("GitHub write-token не найден")
+    encoded_path = quote(path)
+    current = github_api_request("GET", f"/repos/{repo_full_name}/contents/{encoded_path}", access_token, allow_404=True)
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+    }
+    if current and current.get("sha"):
+        payload["sha"] = current["sha"]
+    return github_api_request("PUT", f"/repos/{repo_full_name}/contents/{encoded_path}", access_token, payload)
+
+
+def slugify(value, fallback="item"):
+    slug = re.sub(r"[^a-z0-9._-]+", "-", str(value or "").lower()).strip("-._")
+    return slug[:80] or fallback
+
+
+def build_solution_markdown(user, payload):
+    answer = str(payload.get("answer") or "").strip()
+    prompt = str(payload.get("prompt") or "").strip()
+    lesson_title = str(payload.get("lessonTitle") or payload.get("lessonId") or "MLingo task").strip()
+    topic_title = str(payload.get("topicTitle") or "MLingo").strip()
+    kind = str(payload.get("kind") or "solution").strip()
+    language = "markdown" if kind == "idea" else "python"
+    fence = "````" if "```" in answer else "```"
+    review_checklist = payload.get("reviewChecklist") if isinstance(payload.get("reviewChecklist"), list) else []
+    checklist = review_checklist or [
+        "Проверь корректность validation и отсутствие leakage.",
+        "Проверь shape/dtype/device контракты.",
+        "Проверь читаемость, разбиение на функции и воспроизводимость.",
+    ]
+    return f"""# {lesson_title}
+
+- Автор: @{user.get("github_login") or user.get("username")}
+- Тема: {topic_title}
+- Тип задания: {kind}
+- Экспортировано: {datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+## Условие
+
+{prompt or "Условие не сохранено в payload."}
+
+## Решение
+
+{fence}{language}
+{answer}
+{fence}
+
+## Review checklist
+
+{chr(10).join(f"- {item}" for item in checklist)}
+"""
 
 
 def pick_verified_github_email(emails):
@@ -339,11 +511,13 @@ def unique_github_username(db, login, github_id):
         candidate = f"{base[:24 - len(tail)]}{tail}"
 
 
-def upsert_github_user(db, profile, email):
+def upsert_github_user(db, profile, email, access_token=None, scope_text=""):
     github_id = int(profile["id"])
     github_login = str(profile.get("login") or f"github-{github_id}")
     avatar_url = profile.get("avatar_url")
     current = now_ts()
+    write_token = access_token if github_has_repo_scope(scope_text) else None
+    stored_scope = scope_text if write_token else None
     existing = db.execute("select * from users where github_id = %s", (github_id,)).fetchone()
     if existing:
         row = db.execute(
@@ -352,11 +526,13 @@ def upsert_github_user(db, profile, email):
             set email = coalesce(%s, email),
                 github_login = %s,
                 github_avatar_url = %s,
+                github_access_token = coalesce(%s, github_access_token),
+                github_scope = coalesce(%s, github_scope),
                 auth_provider = case when password_hash is null then 'github' else auth_provider end
             where id = %s
             returning *
             """,
-            (email, github_login, avatar_url, existing["id"]),
+            (email, github_login, avatar_url, write_token, stored_scope, existing["id"]),
         ).fetchone()
         return row
 
@@ -370,11 +546,13 @@ def upsert_github_user(db, profile, email):
             set github_id = %s,
                 github_login = %s,
                 github_avatar_url = %s,
+                github_access_token = %s,
+                github_scope = %s,
                 auth_provider = case when password_hash is null then 'github' else auth_provider end
             where id = %s
             returning *
             """,
-            (github_id, github_login, avatar_url, linked["id"]),
+            (github_id, github_login, avatar_url, write_token, stored_scope, linked["id"]),
         ).fetchone()
     if linked and linked.get("github_id") != github_id:
         email = None
@@ -382,11 +560,11 @@ def upsert_github_user(db, profile, email):
     username = unique_github_username(db, github_login, github_id)
     return db.execute(
         """
-        insert into users (username, email, password_hash, auth_provider, github_id, github_login, github_avatar_url, created_at)
-        values (%s, %s, null, 'github', %s, %s, %s, %s)
+        insert into users (username, email, password_hash, auth_provider, github_id, github_login, github_avatar_url, github_access_token, github_scope, github_repo_name, created_at)
+        values (%s, %s, null, 'github', %s, %s, %s, %s, %s, %s, %s)
         returning *
         """,
-        (username, email, github_id, github_login, avatar_url, current),
+        (username, email, github_id, github_login, avatar_url, write_token, stored_scope, GITHUB_SOLUTIONS_REPO_NAME, current),
     ).fetchone()
 
 
@@ -553,13 +731,14 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         if not access_token:
             self.send_redirect("/app?auth=github-error", clear_state=True)
             return
+        scope_text = str(token_payload.get("scope") or "")
 
         profile = github_json_request(f"{GITHUB_API_URL}/user", token=access_token)
         email = normalize_email(str(profile.get("email") or "")) or None
         if not email:
             emails = github_json_request(f"{GITHUB_API_URL}/user/emails", token=access_token)
             email = pick_verified_github_email(emails if isinstance(emails, list) else [])
-        user = upsert_github_user(db, profile, email)
+        user = upsert_github_user(db, profile, email, access_token, scope_text)
         save_progress(db, user["id"], get_progress(db, user["id"])["state"])
         token = self.create_session(db, user["id"])
         self.send_redirect("/app?auth=github", token=token, clear_state=True)
@@ -593,6 +772,11 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                         set github_id = null,
                             github_login = null,
                             github_avatar_url = null,
+                            github_access_token = null,
+                            github_scope = null,
+                            github_repo_full_name = null,
+                            github_repo_enabled = false,
+                            github_repo_connected_at = null,
                             auth_provider = 'password'
                         where id = %s
                         returning *
@@ -602,13 +786,119 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user)})
                     return
 
+                if path == "/api/github/repo/enable" and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    payload = read_json(self)
+                    repo_name = normalize_repo_name(payload.get("repoName") or user.get("github_repo_name") or GITHUB_SOLUTIONS_REPO_NAME)
+                    repo = ensure_github_repo(user, repo_name)
+                    user = db.execute(
+                        """
+                        update users
+                        set github_repo_name = %s,
+                            github_repo_full_name = %s,
+                            github_repo_enabled = true,
+                            github_repo_connected_at = %s
+                        where id = %s
+                        returning *
+                        """,
+                        (repo["name"], repo["full_name"], now_ts(), user["id"]),
+                    ).fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user), "repo": public_user(user)["github"]["repo"]})
+                    return
+
+                if path == "/api/github/repo/disable" and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    user = db.execute(
+                        """
+                        update users
+                        set github_repo_enabled = false
+                        where id = %s
+                        returning *
+                        """,
+                        (user["id"],),
+                    ).fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user)})
+                    return
+
+                if path == "/api/github/solutions" and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    if not user.get("github_repo_enabled"):
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Сначала включи GitHub repo mode в профиле")
+                        return
+                    payload = read_json(self)
+                    answer = str(payload.get("answer") or "").strip()
+                    lesson_id = str(payload.get("lessonId") or "").strip()
+                    lesson_title = str(payload.get("lessonTitle") or lesson_id or "MLingo task").strip()
+                    kind = str(payload.get("kind") or "solution").strip()
+                    if not lesson_id or not answer:
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Нужны lessonId и answer")
+                        return
+                    repo_full_name = user.get("github_repo_full_name") or f"{user.get('github_login')}/{user.get('github_repo_name') or GITHUB_SOLUTIONS_REPO_NAME}"
+                    path_slug = slugify(lesson_id, "lesson")
+                    file_path = f"solutions/{path_slug}/{utc_stamp()}-{secrets.token_hex(3)}.md"
+                    markdown = build_solution_markdown(user, payload)
+                    result = put_github_solution_file(
+                        user,
+                        repo_full_name,
+                        file_path,
+                        markdown,
+                        f"Add MLingo solution for {lesson_id}",
+                    )
+                    content = result.get("content") or {}
+                    commit = result.get("commit") or {}
+                    row = db.execute(
+                        """
+                        insert into solutions (
+                          user_id, lesson_id, lesson_title, topic_id, topic_title, kind,
+                          answer_text, github_repo, github_path, github_commit_sha, github_html_url, status, created_at
+                        )
+                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'queued_for_review', %s)
+                        returning *
+                        """,
+                        (
+                            user["id"],
+                            lesson_id,
+                            lesson_title,
+                            str(payload.get("topicId") or ""),
+                            str(payload.get("topicTitle") or ""),
+                            kind,
+                            answer,
+                            repo_full_name,
+                            file_path,
+                            commit.get("sha"),
+                            content.get("html_url"),
+                            now_ts(),
+                        ),
+                    ).fetchone()
+                    self.send_json(
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "solution": {
+                                "id": row["id"],
+                                "lessonId": row["lesson_id"],
+                                "githubRepo": row["github_repo"],
+                                "githubPath": row["github_path"],
+                                "githubUrl": row["github_html_url"],
+                                "status": row["status"],
+                            },
+                        },
+                    )
+                    return
+
                 if path == "/api/health" and method == "GET":
                     db.execute("select 1").fetchone()
                     self.send_json(HTTPStatus.OK, {"ok": True, "database": "postgres"})
                     return
 
                 if path == "/api/config" and method == "GET":
-                    self.send_json(HTTPStatus.OK, {"ok": True, "githubOAuth": github_oauth_configured()})
+                    self.send_json(HTTPStatus.OK, {"ok": True, "githubOAuth": github_oauth_configured(), "githubRepoWrite": github_repo_write_configured()})
                     return
 
                 if path == "/api/check-username" and method == "GET":
@@ -725,6 +1015,39 @@ class MLingoHandler(SimpleHTTPRequestHandler):
 
                 if path == "/api/leaderboard" and method == "GET":
                     self.send_json(HTTPStatus.OK, {"ok": True, "leaderboard": leaderboard(db)})
+                    return
+
+                if path == "/api/review/solutions" and method == "GET":
+                    rows = db.execute(
+                        """
+                        select s.id, s.lesson_id, s.lesson_title, s.topic_title, s.kind, s.github_html_url,
+                               s.status, s.created_at, u.username, u.github_login
+                        from solutions s
+                        join users u on u.id = s.user_id
+                        order by s.created_at desc
+                        limit 50
+                        """
+                    ).fetchall()
+                    self.send_json(
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "solutions": [
+                                {
+                                    "id": row["id"],
+                                    "lessonId": row["lesson_id"],
+                                    "lessonTitle": row["lesson_title"],
+                                    "topicTitle": row["topic_title"],
+                                    "kind": row["kind"],
+                                    "githubUrl": row["github_html_url"],
+                                    "status": row["status"],
+                                    "createdAt": row["created_at"],
+                                    "author": row["github_login"] or row["username"],
+                                }
+                                for row in rows
+                            ],
+                        },
+                    )
                     return
 
             self.send_error_json(HTTPStatus.NOT_FOUND, "API endpoint не найден")

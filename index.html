@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean10" />
-    <script defer src="./app.js?v=clean10"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean11" />
+    <script defer src="./app.js?v=clean11"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -163,15 +163,21 @@
                   </div>
                   <div class="integration-actions">
                     <button class="primary-button" id="githubConnectButton" type="button">Подключить</button>
+                    <button class="primary-button" id="githubRepoEnableButton" type="button">Включить sync</button>
+                    <button class="ghost-button" id="githubRepoDisableButton" type="button">Пауза sync</button>
                     <button class="ghost-button danger-button" id="githubDisconnectButton" type="button">Отключить</button>
                   </div>
                 </div>
+                <label class="repo-source">
+                  <span>Solutions repository</span>
+                  <input id="githubRepoInput" value="mlingo-solutions" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                </label>
                 <div class="integration-how">
                   <strong>Как это будет работать</strong>
                   <ul>
                     <li>Сейчас: GitHub используется для входа и привязки аккаунта.</li>
-                    <li id="githubRepoLine">Дальше: MLingo сможет пушить решения в твой репозиторий.</li>
-                    <li>Решения можно будет отдавать другим как review-задачи.</li>
+                    <li id="githubRepoLine">Repo mode создаст или использует <code>mlingo-solutions</code>.</li>
+                    <li>После write/fix/idea задач решение пушится markdown-файлом и попадает в очередь review.</li>
                     <li>Дискуссии и leaderboard останутся быстрыми через базу MLingo.</li>
                   </ul>
                 </div>

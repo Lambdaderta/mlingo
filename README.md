@@ -53,7 +53,8 @@ python3 server.py --port 4180
 - `PORT` — порт приложения, по умолчанию `4180`.
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — данные GitHub OAuth App, если нужен вход через GitHub.
 - `GITHUB_OAUTH_REDIRECT_URI` — callback URL, например `https://mlingo.app/api/auth/github/callback`.
-- `GITHUB_OAUTH_SCOPES` — по умолчанию `read:user user:email`; write-доступ к репозиториям не запрашивается.
+- `GITHUB_OAUTH_SCOPES` — по умолчанию `read:user user:email public_repo`, чтобы repo mode мог пушить публичные решения.
+- `GITHUB_SOLUTIONS_REPO_NAME` — имя репозитория решений, по умолчанию `mlingo-solutions`.
 
 ## API
 
@@ -64,14 +65,18 @@ python3 server.py --port 4180
 - `GET /api/auth/github/start` — старт GitHub OAuth.
 - `GET /api/auth/github/callback` — callback от GitHub OAuth.
 - `POST /api/auth/github/disconnect` — отключение GitHub от аккаунта, если есть вход по паролю.
+- `POST /api/github/repo/enable` — создать или подключить solutions repo.
+- `POST /api/github/repo/disable` — поставить GitHub sync решений на паузу.
+- `POST /api/github/solutions` — сохранить решение в GitHub и очередь review.
 - `POST /api/logout` — выход.
 - `GET /api/me` — текущий пользователь.
 - `GET /api/progress` — загрузка прогресса.
 - `PUT /api/progress` — сохранение прогресса.
 - `POST /api/event` — событие прохождения урока.
 - `GET /api/leaderboard` — таблица лидеров.
+- `GET /api/review/solutions` — очередь решений для будущего peer review.
 
-В PostgreSQL хранятся пользователи, GitHub-связки, сессии, JSON прогресса, XP, стрики, ошибки, события уроков и leaderboard. Вход через GitHub используется как провайдер аккаунта, но не коммитит прогресс в GitHub.
+В PostgreSQL хранятся пользователи, GitHub-связки, сессии, JSON прогресса, XP, стрики, ошибки, события уроков, очередь review и leaderboard. Вход через GitHub используется как провайдер аккаунта; repo mode отдельно пушит решения в `mlingo-solutions`.
 
 ## Структура проекта
 

@@ -9,7 +9,7 @@ Frontend: index.html + app.js + styles.css
 Банк заданий: встроенные уроки + lesson-packs/*.json
 Локальный прогресс: localStorage
 Облачный прогресс: Python API + PostgreSQL
-Android: Capacitor wrapper
+Android: Capacitor wrapper с immersive mode
 ```
 
 Приложение остается работоспособным без сети. Сейчас можно использовать локальные оффлайн-профили; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
@@ -58,6 +58,8 @@ npm run android:test
 ```bash
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+При открытии APK приложение включает fullscreen/immersive mode. Системные кнопки “домой/назад” и панели Android скрываются до свайпа от края экрана.
 
 ## GitHub Releases для APK
 

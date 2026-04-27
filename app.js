@@ -3378,7 +3378,7 @@ let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
 let authCheckTimer = null;
-let runtimeConfig = { githubOAuth: false };
+let runtimeConfig = { githubOAuth: false, githubRepoWrite: false };
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
@@ -3434,6 +3434,9 @@ function cacheElements() {
     "githubIntegrationTitle",
     "githubIntegrationSubtitle",
     "githubConnectButton",
+    "githubRepoEnableButton",
+    "githubRepoDisableButton",
+    "githubRepoInput",
     "githubDisconnectButton",
     "githubRepoLine",
     "githubIntegrationMessage",
@@ -3499,6 +3502,8 @@ function bindEvents() {
   els.logoutButton?.addEventListener("click", logout);
   els.githubLoginButton?.addEventListener("click", startGithubLogin);
   els.githubConnectButton?.addEventListener("click", startGithubLogin);
+  els.githubRepoEnableButton?.addEventListener("click", enableGithubRepoMode);
+  els.githubRepoDisableButton?.addEventListener("click", disableGithubRepoMode);
   els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
   els.authUsername?.addEventListener("input", scheduleAuthChecks);
   els.authEmail?.addEventListener("input", scheduleAuthChecks);
@@ -4234,6 +4239,7 @@ function checkAnswer() {
     saveState();
     showFeedback("Верно", lesson.kind === "idea" ? `${lesson.explain}\n\n${lesson.reference || ""}` : lesson.explain, true);
     sendEvent(lesson.id, true, firstPass ? 12 : 0);
+    syncSolutionIfEnabled(lesson, firstPass);
     renderStats();
     renderTopics(document.querySelector(".filter-chip.is-active")?.dataset.filter || "all");
     renderRoadmap();
@@ -4472,6 +4478,49 @@ async function disconnectGithub() {
   }
 }
 
+async function enableGithubRepoMode() {
+  if (!currentUser?.github) {
+    startGithubLogin();
+    return;
+  }
+  if (!runtimeConfig.githubRepoWrite) {
+    showGithubIntegrationMessage("Backend OAuth сейчас без public_repo. Добавь scope public_repo и перезапусти сервер.");
+    return;
+  }
+  if (!currentUser.github.canWriteRepo) {
+    showGithubIntegrationMessage("Нужно обновить права GitHub. Сейчас отправлю на OAuth с public_repo.", false);
+    startGithubLogin();
+    return;
+  }
+  const repoName = (els.githubRepoInput?.value || currentUser.github.repo?.name || "mlingo-solutions").trim();
+  try {
+    const data = await apiRequest("/api/github/repo/enable", {
+      method: "POST",
+      body: { repoName },
+    });
+    currentUser = data.user;
+    renderAuthUi();
+    showGithubIntegrationMessage(`Repo mode включен: ${data.repo?.fullName || repoName}.`, true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
+}
+
+async function disableGithubRepoMode() {
+  if (!currentUser?.github) {
+    showGithubIntegrationMessage("GitHub не подключен.", false);
+    return;
+  }
+  try {
+    const data = await apiRequest("/api/github/repo/disable", { method: "POST" });
+    currentUser = data.user;
+    renderAuthUi();
+    showGithubIntegrationMessage("Автосохранение решений в GitHub поставлено на паузу.", true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
+}
+
 async function submitLocalAuth(mode, { username, email, password, identity }) {
   if (!password || password.length < 6) {
     showAuthStatus("Оффлайн-профиль тоже требует пароль минимум 6 символов.");
@@ -4587,9 +4636,13 @@ function normalizeIdentity(value) {
 async function loadRuntimeConfig() {
   try {
     const data = await apiRequest("/api/config", { skipAuth: true });
-    runtimeConfig = { ...runtimeConfig, githubOAuth: Boolean(data.githubOAuth) };
+    runtimeConfig = {
+      ...runtimeConfig,
+      githubOAuth: Boolean(data.githubOAuth),
+      githubRepoWrite: Boolean(data.githubRepoWrite),
+    };
   } catch {
-    runtimeConfig = { ...runtimeConfig, githubOAuth: false };
+    runtimeConfig = { ...runtimeConfig, githubOAuth: false, githubRepoWrite: false };
   }
   renderAuthUi();
 }
@@ -4764,11 +4817,18 @@ function renderAuthUi() {
 function renderGithubIntegration() {
   if (!els.githubIntegrationPanel) return;
   const connected = Boolean(currentUser?.github);
+  const repoEnabled = Boolean(currentUser?.github?.repo?.enabled);
+  const canWrite = Boolean(currentUser?.github?.canWriteRepo && runtimeConfig.githubRepoWrite);
   els.githubIntegrationPanel.classList.toggle("is-connected", connected);
+  els.githubIntegrationPanel.classList.toggle("is-syncing", repoEnabled);
   els.githubIntegrationPanel.classList.toggle("is-disabled", !runtimeConfig.githubOAuth && !connected);
-  els.githubIntegrationMark.textContent = connected ? "✓" : "GH";
-  els.githubIntegrationTitle.textContent = connected ? "Подключен к GitHub" : "GitHub не подключен";
-  if (connected) {
+  els.githubIntegrationMark.textContent = repoEnabled ? "↗" : connected ? "✓" : "GH";
+  els.githubIntegrationTitle.textContent = repoEnabled ? "Solutions repo включен" : connected ? "Подключен к GitHub" : "GitHub не подключен";
+  if (repoEnabled) {
+    els.githubIntegrationSubtitle.textContent = currentUser.github.repo?.fullName || currentUser.github.repo?.name || "mlingo-solutions";
+  } else if (connected && !canWrite) {
+    els.githubIntegrationSubtitle.textContent = runtimeConfig.githubRepoWrite ? "Нужно обновить GitHub-права для записи решений." : "Backend OAuth пока без public_repo.";
+  } else if (connected) {
     els.githubIntegrationSubtitle.textContent = `@${currentUser.github.login || currentUser.username}`;
   } else if (runtimeConfig.githubOAuth) {
     els.githubIntegrationSubtitle.textContent = currentUser ? "Можно привязать GitHub к текущему аккаунту." : "Войди через GitHub или привяжи его после регистрации.";
@@ -4776,15 +4836,25 @@ function renderGithubIntegration() {
     els.githubIntegrationSubtitle.textContent = "OAuth еще не настроен на сервере.";
   }
   if (els.githubConnectButton) els.githubConnectButton.hidden = connected || !runtimeConfig.githubOAuth;
+  if (els.githubRepoEnableButton) {
+    els.githubRepoEnableButton.hidden = !connected || repoEnabled;
+    els.githubRepoEnableButton.disabled = !runtimeConfig.githubRepoWrite;
+    els.githubRepoEnableButton.textContent = canWrite ? "Включить sync" : "Дать write-доступ";
+  }
+  if (els.githubRepoDisableButton) els.githubRepoDisableButton.hidden = !repoEnabled;
+  if (els.githubRepoInput) {
+    els.githubRepoInput.value = currentUser?.github?.repo?.name || els.githubRepoInput.value || "mlingo-solutions";
+    els.githubRepoInput.disabled = !connected || repoEnabled;
+  }
   if (els.githubDisconnectButton) els.githubDisconnectButton.hidden = !connected;
   if (els.githubDisconnectButton) {
     els.githubDisconnectButton.disabled = connected && !currentUser.hasPassword;
     els.githubDisconnectButton.title = connected && !currentUser.hasPassword ? "Нельзя отключить единственный способ входа" : "";
   }
   if (els.githubRepoLine) {
-    const login = currentUser?.github?.login || currentUser?.username || "username";
+    const fullName = currentUser?.github?.repo?.fullName || `${currentUser?.github?.login || currentUser?.username || "username"}/${currentUser?.github?.repo?.name || "mlingo-solutions"}`;
     els.githubRepoLine.innerHTML = connected
-      ? `Дальше: решения смогут пушиться в <code>${escapeHtml(login)}/mlingo-solutions</code>.`
+      ? `Repo mode ${repoEnabled ? "пушит" : "будет пушить"} решения в <code>${escapeHtml(fullName)}</code>.`
       : "Дальше: MLingo сможет пушить решения в твой репозиторий.";
   }
 }
@@ -4793,6 +4863,50 @@ function showGithubIntegrationMessage(text, good = false) {
   if (!els.githubIntegrationMessage) return;
   els.githubIntegrationMessage.textContent = text || "";
   els.githubIntegrationMessage.className = `auth-hint ${good ? "is-good" : text ? "is-bad" : ""}`;
+}
+
+function appendFeedbackNote(text, good = true) {
+  if (!els.feedbackBox || els.feedbackBox.hidden || !text) return;
+  els.feedbackBox.insertAdjacentHTML("beforeend", `<p class="feedback-note ${good ? "is-good" : "is-bad"}">${escapeHtml(text)}</p>`);
+}
+
+function solutionEligible(lesson) {
+  return ["write", "fix", "idea"].includes(lesson.kind);
+}
+
+function captureSolutionAnswer(lesson) {
+  if (lesson.kind === "idea") return document.getElementById("ideaAnswer")?.value || typedCode || "";
+  if (lesson.kind === "write" || lesson.kind === "fix") return document.getElementById("codeAnswer")?.value || typedCode || "";
+  return "";
+}
+
+async function syncSolutionIfEnabled(lesson, firstPass) {
+  if (!firstPass || !solutionEligible(lesson)) return;
+  if (!currentUser?.github?.repo?.enabled || currentUser.local) return;
+  const answer = captureSolutionAnswer(lesson).trim();
+  if (!answer) return;
+  const topic = getCurrentTopic();
+  try {
+    const data = await apiRequest("/api/github/solutions", {
+      method: "POST",
+      body: {
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        topicId: topic.id,
+        topicTitle: topic.title,
+        kind: lesson.kind,
+        prompt: lesson.prompt,
+        answer,
+        reviewChecklist: (lesson.rubric || []).map((item) => item.label).filter(Boolean),
+      },
+    });
+    const repo = currentUser.github.repo?.fullName || data.solution?.githubRepo;
+    appendFeedbackNote(`Решение сохранено в GitHub: ${repo}/${data.solution?.githubPath || "solutions"}.`, true);
+    showGithubIntegrationMessage("Последнее решение ушло в GitHub и добавлено в review queue.", true);
+  } catch (error) {
+    appendFeedbackNote(`GitHub sync не прошёл: ${error.message}`, false);
+    showGithubIntegrationMessage(error.message);
+  }
 }
 
 function shouldUseLocalAuthFallback(error) {

@@ -855,6 +855,11 @@ textarea:focus-visible {
   background: rgba(37, 120, 83, 0.15);
 }
 
+.integration-status.is-syncing {
+  border-color: rgba(211, 173, 95, 0.46);
+  background: rgba(211, 173, 95, 0.08);
+}
+
 .integration-status.is-disabled {
   opacity: 0.78;
 }
@@ -874,6 +879,11 @@ textarea:focus-visible {
 .integration-status.is-connected .integration-mark {
   background: rgba(61, 220, 151, 0.16);
   color: #46e6a1;
+}
+
+.integration-status.is-syncing .integration-mark {
+  background: rgba(211, 173, 95, 0.16);
+  color: var(--amber-strong);
 }
 
 .integration-status strong,
@@ -903,6 +913,34 @@ textarea:focus-visible {
   opacity: 0.48;
 }
 
+.repo-source {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.repo-source span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.repo-source input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #181818;
+  color: var(--ink);
+  padding: 0.72rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.repo-source input:disabled {
+  opacity: 0.62;
+}
+
 .integration-how {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -926,6 +964,21 @@ textarea:focus-visible {
 
 .integration-how code {
   color: #46e6a1;
+}
+
+.feedback-note {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.feedback-note.is-good {
+  color: #9bd7a8;
+}
+
+.feedback-note.is-bad {
+  color: #e38b7d;
 }
 
 .library-grid {
