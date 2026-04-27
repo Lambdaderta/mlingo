@@ -11,7 +11,7 @@ Browser / PWA
        -> static files: index.html, app.js, styles.css
        -> API: /api/*
        -> Postgres
-       -> GitHub OAuth, если включен вход через GitHub
+       -> GitHub OAuth для обязательного входа
 ```
 
 Для первых 100 активных пользователей этого более чем достаточно. Главный узкий участок на старте — не PostgreSQL, а качество задач, удобство добавления контента и стабильность пользовательского опыта.
@@ -62,7 +62,7 @@ Browser / PWA
 4. В web service добавь переменные окружения:
    - `DATABASE_URL` из PostgreSQL variables;
    - `MLINGO_ALLOWED_ORIGIN=https://YOUR-DOMAIN`;
-   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`, если нужен GitHub-вход.
+   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`.
 5. Укажи старт через Dockerfile.
 6. Создай Railway domain или custom domain.
 
@@ -108,7 +108,7 @@ https://mlingo.app
 
 ## Вход через GitHub
 
-MLingo поддерживает GitHub OAuth как способ входа, похожий на TensorTonic: пользователь нажимает GitHub, подтверждает доступ, а прогресс хранится в базе MLingo. Для этого не нужны права на запись в репозитории.
+MLingo использует GitHub OAuth как единственный способ входа, похожий на TensorTonic: пользователь нажимает GitHub, подтверждает доступ, а прогресс хранится в базе MLingo. Для базового входа не нужны права на запись в репозитории.
 
 В профиле есть блок “Интеграции”: он показывает connected/disconnected состояние GitHub и позже станет местом для настройки репозитория решений.
 
@@ -141,7 +141,7 @@ Repo mode работает отдельным opt-in: пользователь �
 
 ## Перед публичным запуском
 
-- Проверь регистрацию и вход с телефона.
+- Проверь GitHub-вход с телефона.
 - Проверь GitHub-вход на production-домене и на локальном callback.
 - Создай тестового пользователя и пройди 2-3 урока.
 - Проверь leaderboard.

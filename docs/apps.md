@@ -7,14 +7,14 @@ MLingo работает как offline-first web app и может быть уп
 ```text
 Frontend: index.html + app.js + styles.css
 Банк заданий: встроенные уроки + lesson-packs/*.json
-Локальный прогресс: localStorage
-GitHub-прогресс без сервера: local token + GitHub Contents API
-Облачный прогресс позже: Python API + PostgreSQL
+Кэш прогресса на устройстве: localStorage
+GitHub-прогресс: backend repo mode или local token + GitHub Contents API
+Облачный прогресс: GitHub OAuth + Python API + PostgreSQL
 Android: Capacitor wrapper с immersive mode
 macOS: native AppKit + WKWebView wrapper
 ```
 
-Регистрация обязательна перед уроками. Без backend приложение предлагает локальный оффлайн-аккаунт; при backend с `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET` кнопка GitHub OAuth создает или открывает аккаунт MLingo автоматически. Приложение остается работоспособным без сети: можно использовать локальные оффлайн-профили и serverless GitHub sync; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
+Вход обязателен перед уроками и идет только через GitHub. Для OAuth нужны `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET` на backend; кнопка GitHub создает или открывает аккаунт MLingo автоматически. Кэш уроков и прогресса остается на устройстве, но локальных password-профилей в приложении больше нет.
 
 ## Android APK
 
@@ -76,7 +76,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.3-macOS.zip
+dist/MLingo-v0.1.4-macOS.zip
 ```
 
 Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
@@ -88,17 +88,17 @@ APK и macOS zip не нужно хранить в git. Workflow `.github/workfl
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.3 -m "MLingo v0.1.3"
-git push origin v0.1.3
+git tag -a v0.1.4 -m "MLingo v0.1.4"
+git push origin v0.1.4
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.3 -> Assets
+GitHub repo -> Releases -> v0.1.4 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.3`, и workflow перезальет APK/macOS zip в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.4`, и workflow перезальет APK/macOS zip в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 

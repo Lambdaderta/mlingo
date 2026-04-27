@@ -636,15 +636,13 @@ textarea:focus-visible {
   margin-top: 0.75rem;
 }
 
-.fill-row label,
-.auth-form label {
+.fill-row label {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 850;
 }
 
 .fill-row input,
-.auth-form input,
 .code-textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -653,8 +651,7 @@ textarea:focus-visible {
   color: var(--ink);
 }
 
-.fill-row input,
-.auth-form input {
+.fill-row input {
   padding: 0.78rem;
 }
 
@@ -1204,17 +1201,6 @@ body.auth-required .mobile-tabs {
   width: min(100%, 34rem);
   padding: 1rem;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
-}
-
-.auth-form {
-  display: grid;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.auth-form label {
-  display: grid;
-  gap: 0.35rem;
 }
 
 .auth-hint {

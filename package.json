@@ -1,6 +1,6 @@
 {
   "name": "mlingo",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Offline-first ML coding trainer.",
   "scripts": {

@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean14" />
-    <script defer src="./app.js?v=clean14"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean15" />
+    <script defer src="./app.js?v=clean15"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -304,33 +304,15 @@
             </div>
             <button class="ghost-button icon-button" id="authCloseButton" type="button" aria-label="Закрыть">×</button>
           </div>
-          <p class="prompt">Регистрация обязательна: так MLingo сохраняет прогресс, стрики и потом сможет синхронизировать решения между устройствами.</p>
+          <p class="prompt">Вход обязателен и идет только через GitHub: так MLingo сохраняет прогресс, стрики и потом сможет синхронизировать решения между устройствами.</p>
           <button class="github-auth-button" id="githubLoginButton" type="button">
             <span class="github-auth-mark">GH</span>
             <span>
-              <strong>Создать аккаунт через GitHub</strong>
-              <small id="githubAuthHint">Если backend OAuth доступен, аккаунт создастся автоматически.</small>
+              <strong>Продолжить через GitHub</strong>
+              <small id="githubAuthHint">Аккаунт MLingo создастся автоматически после OAuth.</small>
             </span>
           </button>
-          <div class="auth-form">
-            <label>
-              <span>Логин</span>
-              <input id="authUsername" autocomplete="username" placeholder="например: lambda" />
-              <small class="auth-hint" id="authUsernameHint">3-24 символа: буквы, цифры, _-.</small>
-            </label>
-            <label>
-              <span>Почта</span>
-              <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" />
-              <small class="auth-hint" id="authEmailHint">Нужна при создании аккаунта. Войти можно по логину или почте.</small>
-            </label>
-            <label>
-              <span>Пароль</span>
-              <input id="authPassword" type="password" autocomplete="current-password" placeholder="минимум 6 символов" />
-            </label>
-          </div>
           <div class="lesson-controls auth-actions">
-            <button class="ghost-button" id="loginButton" type="button">Войти</button>
-            <button class="primary-button" id="registerButton" type="button">Создать аккаунт</button>
             <button class="ghost-button" id="logoutButton" type="button">Выйти</button>
           </div>
           <div class="feedback auth-feedback" id="authStatus" hidden></div>

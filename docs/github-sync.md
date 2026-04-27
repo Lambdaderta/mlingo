@@ -1,6 +1,6 @@
-# GitHub Sync без сервера
+# GitHub Sync
 
-MLingo может работать без публичного backend: задания берутся из GitHub raw, прогресс и решения сохраняются в личный репозиторий пользователя через GitHub Contents API.
+MLingo умеет брать задания из GitHub raw и сохранять прогресс/решения в личный репозиторий пользователя через GitHub Contents API. Основной вход в приложение идет через GitHub OAuth на backend; fine-grained token в этом разделе нужен только для прямой записи в repo `mlingo-solutions`.
 
 ## Что хранится
 
@@ -27,7 +27,7 @@ solutions/<lesson-id>/<timestamp>.md
 
 Token хранится только в `localStorage` текущего устройства. Не отправляй его друзьям и не коммить в репозиторий.
 
-## Что можно делать без backend
+## Что можно делать через GitHub API
 
 - Синхронизировать банк задач из GitHub.
 - Сохранять прогресс в GitHub.

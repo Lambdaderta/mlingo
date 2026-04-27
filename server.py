@@ -764,7 +764,7 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                         self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user)})
                         return
                     if not user.get("password_hash"):
-                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Сначала нужен вход по паролю, иначе аккаунт потеряет единственный способ входа")
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "GitHub сейчас единственный способ входа, поэтому его нельзя отключить.")
                         return
                     user = db.execute(
                         """
@@ -902,77 +902,19 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     return
 
                 if path == "/api/check-username" and method == "GET":
-                    query = parse_qs(parsed_url.query)
-                    username = normalize_username(str((query.get("username") or [""])[0]))
-                    if len(username) < 3 or len(username) > 24:
-                        self.send_json(HTTPStatus.OK, {"ok": True, "username": username, "available": False, "message": "3-24 символа: буквы, цифры, _-."})
-                        return
-                    exists = db.execute("select 1 from users where username = %s", (username,)).fetchone()
-                    self.send_json(HTTPStatus.OK, {"ok": True, "username": username, "available": not bool(exists), "message": "Свободен" if not exists else "Уже занят"})
+                    self.send_error_json(HTTPStatus.GONE, "MLingo использует только GitHub OAuth.")
                     return
 
                 if path == "/api/check-email" and method == "GET":
-                    query = parse_qs(parsed_url.query)
-                    email = normalize_email(str((query.get("email") or [""])[0]))
-                    if not is_valid_email(email):
-                        self.send_json(HTTPStatus.OK, {"ok": True, "email": email, "available": False, "message": "Нужна рабочая почта"})
-                        return
-                    exists = db.execute("select 1 from users where lower(email) = lower(%s)", (email,)).fetchone()
-                    self.send_json(HTTPStatus.OK, {"ok": True, "email": email, "available": not bool(exists), "message": "Почта свободна" if not exists else "Почта уже занята"})
+                    self.send_error_json(HTTPStatus.GONE, "MLingo использует только GitHub OAuth.")
                     return
 
                 if path == "/api/register" and method == "POST":
-                    payload = read_json(self)
-                    username = normalize_username(str(payload.get("username", "")))
-                    email = normalize_email(str(payload.get("email", "")))
-                    password = str(payload.get("password", ""))
-                    if len(username) < 3 or len(username) > 24:
-                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Логин: 3-24 символа, буквы/цифры/_-.")
-                        return
-                    if not is_valid_email(email):
-                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Введи нормальную почту для восстановления и синхронизации")
-                        return
-                    if len(password) < 6:
-                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Пароль должен быть минимум 6 символов")
-                        return
-                    existing = db.execute(
-                        "select username, email from users where username = %s or lower(email) = lower(%s)",
-                        (username, email),
-                    ).fetchone()
-                    if existing:
-                        if existing["username"] == username:
-                            self.send_error_json(HTTPStatus.CONFLICT, "Такой логин уже занят")
-                            return
-                        self.send_error_json(HTTPStatus.CONFLICT, "Такая почта уже занята")
-                        return
-                    user = db.execute(
-                        """
-                        insert into users (username, email, password_hash, created_at)
-                        values (%s, %s, %s, %s)
-                        returning *
-                        """,
-                        (username, email, hash_password(password), now_ts()),
-                    ).fetchone()
-                    save_progress(db, user["id"], empty_progress_state())
-                    token = self.create_session(db, user["id"])
-                    self.send_json(HTTPStatus.OK, {"ok": True, "token": token, "user": public_user(user), "progress": get_progress(db, user["id"]), "leaderboard": leaderboard(db)}, token=token)
+                    self.send_error_json(HTTPStatus.GONE, "Локальная регистрация отключена. Войди через GitHub.")
                     return
 
                 if path == "/api/login" and method == "POST":
-                    payload = read_json(self)
-                    identity = str(payload.get("username", "")).strip()
-                    password = str(payload.get("password", ""))
-                    if "@" in identity:
-                        email = normalize_email(identity)
-                        user = db.execute("select * from users where lower(email) = lower(%s)", (email,)).fetchone()
-                    else:
-                        username = normalize_username(identity)
-                        user = db.execute("select * from users where username = %s", (username,)).fetchone()
-                    if not user or not user.get("password_hash") or not verify_password(password, user["password_hash"]):
-                        self.send_error_json(HTTPStatus.UNAUTHORIZED, "Неверный логин или пароль")
-                        return
-                    token = self.create_session(db, user["id"])
-                    self.send_json(HTTPStatus.OK, {"ok": True, "token": token, "user": public_user(user), "progress": get_progress(db, user["id"]), "leaderboard": leaderboard(db)}, token=token)
+                    self.send_error_json(HTTPStatus.GONE, "Вход по паролю отключен. Войди через GitHub.")
                     return
 
                 if path == "/api/logout" and method == "POST":

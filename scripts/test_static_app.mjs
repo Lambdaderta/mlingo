@@ -37,6 +37,9 @@ assert.ok(html.includes('id="packExportButton"'), "index.html should include pac
 assert.ok(html.includes('id="packImportButton"'), "index.html should include pack import button");
 assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
 assert.ok(html.includes('id="githubAuthHint"'), "index.html should explain GitHub auth availability");
+assert.ok(!html.includes('id="authUsername"'), "index.html should not include local username auth");
+assert.ok(!html.includes('id="authPassword"'), "index.html should not include password auth");
+assert.ok(!html.includes('id="registerButton"'), "index.html should not include local registration button");
 assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should include GitHub integrations panel");
 assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
 assert.ok(html.includes('id="githubTokenInput"'), "index.html should include serverless GitHub token input");
@@ -82,11 +85,13 @@ assert.ok(app.includes("async function checkForUpdates"), "app should check GitH
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
-assert.ok(app.includes("async function submitLocalAuth"), "app should include offline local auth fallback");
-assert.ok(app.includes("function saveLocalProgressForUser"), "app should save local account progress");
+assert.ok(!app.includes("async function submitLocalAuth"), "app should not include local auth fallback");
+assert.ok(!app.includes("LOCAL_USERS_KEY"), "app should not persist local password accounts");
 assert.ok(server.includes("/api/auth/github/start"), "server should expose GitHub OAuth start endpoint");
 assert.ok(server.includes("/api/auth/github/callback"), "server should expose GitHub OAuth callback endpoint");
 assert.ok(server.includes("/api/auth/github/disconnect"), "server should expose GitHub OAuth disconnect endpoint");
+assert.ok(server.includes("Локальная регистрация отключена"), "server should disable password registration");
+assert.ok(server.includes("Вход по паролю отключен"), "server should disable password login");
 assert.ok(server.includes("/api/github/repo/enable"), "server should expose GitHub repo mode endpoint");
 assert.ok(server.includes("/api/github/solutions"), "server should expose GitHub solution sync endpoint");
 assert.ok(server.includes("create table if not exists solutions"), "server should persist review queue solutions");

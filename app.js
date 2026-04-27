@@ -4,11 +4,8 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.3";
+const APP_VERSION = "0.1.4";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
-const LOCAL_USERS_KEY = "mlingo.local.users.v1";
-const LOCAL_CURRENT_USER_KEY = "mlingo.local.current_user.v1";
-const LOCAL_PROGRESS_PREFIX = "mlingo.local.progress.";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
   "./lesson-packs/cv-fundamentals-pack.json",
@@ -3382,7 +3379,6 @@ let els = {};
 let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
-let authCheckTimer = null;
 let runtimeConfig = { githubOAuth: false, githubRepoWrite: false };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -3457,13 +3453,6 @@ function cacheElements() {
     "accountButton",
     "authModal",
     "authCloseButton",
-    "authUsername",
-    "authEmail",
-    "authUsernameHint",
-    "authEmailHint",
-    "authPassword",
-    "loginButton",
-    "registerButton",
     "logoutButton",
     "githubLoginButton",
     "githubAuthHint",
@@ -3513,8 +3502,6 @@ function bindEvents() {
   els.authModal?.addEventListener("click", (event) => {
     if (event.target === els.authModal) closeAuthModal();
   });
-  els.loginButton?.addEventListener("click", () => submitAuth("login"));
-  els.registerButton?.addEventListener("click", () => submitAuth("register"));
   els.logoutButton?.addEventListener("click", logout);
   els.githubLoginButton?.addEventListener("click", startGithubLogin);
   els.githubConnectButton?.addEventListener("click", startGithubLogin);
@@ -3526,8 +3513,6 @@ function bindEvents() {
   els.githubProgressPullButton?.addEventListener("click", pullProgressFromGithubDirect);
   els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
   els.checkUpdatesButton?.addEventListener("click", checkForUpdates);
-  els.authUsername?.addEventListener("input", scheduleAuthChecks);
-  els.authEmail?.addEventListener("input", scheduleAuthChecks);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
   els.packImportButton?.addEventListener("click", () => els.packImportInput?.click());
   els.packImportInput?.addEventListener("change", importLessonPackFromFile);
@@ -4432,12 +4417,12 @@ function openAuthModal() {
   els.authModal.hidden = false;
   els.authModal.dataset.locked = isAuthLocked() ? "true" : "false";
   renderAuthUi({ skipGate: true });
-  els.authUsername?.focus();
+  els.githubLoginButton?.focus();
 }
 
 function closeAuthModal() {
   if (isAuthLocked()) {
-    showAuthStatus("Сначала создай аккаунт или войди. Потом MLingo откроет карту и уроки.");
+    showAuthStatus("Сначала войди через GitHub. Потом MLingo откроет карту и уроки.");
     return;
   }
   els.authModal.hidden = true;
@@ -4449,49 +4434,11 @@ function showAuthStatus(text, good = false) {
   els.authStatus.textContent = text;
 }
 
-async function submitAuth(mode) {
-  const username = els.authUsername.value.trim();
-  const email = els.authEmail?.value.trim() || "";
-  const identity = username || email;
-  const password = els.authPassword.value;
-  if (mode === "register" && !email) {
-    showAuthStatus("Для регистрации нужна почта.");
-    els.authEmail?.focus();
-    return;
-  }
-  if (!identity) {
-    showAuthStatus("Введи логин или почту.");
-    els.authUsername?.focus();
-    return;
-  }
-  try {
-    const data = await apiRequest(`/api/${mode}`, {
-      method: "POST",
-      body: mode === "register" ? { username, email, password } : { username: identity, password },
-      skipAuth: true,
-    });
-    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-    currentUser = data.user;
-    mergeRemoteProgress(data.progress);
-    renderLeaderboard(data.leaderboard);
-    saveState();
-    renderAll();
-    closeAuthModal();
-    showAuthStatus(mode === "login" ? "Вошёл. Прогресс синхронизирован." : "Аккаунт создан. Прогресс теперь в базе.", true);
-  } catch (error) {
-    if (shouldUseLocalAuthFallback(error)) {
-      await submitLocalAuth(mode, { username, email, password, identity });
-      return;
-    }
-    showAuthStatus(error.message);
-  }
-}
-
 function startGithubLogin() {
   if (!runtimeConfig.githubOAuth) {
     openAuthModal();
-    showAuthStatus("GitHub-регистрация появится, когда MLingo открыт через backend с GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET. Сейчас можно создать локальный аккаунт.");
-    showGithubIntegrationMessage("Backend OAuth не настроен. Для serverless sync используй GitHub token ниже.", false);
+    showAuthStatus("GitHub OAuth не настроен на backend. Добавь GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET, затем открой MLingo через сервер.");
+    showGithubIntegrationMessage("Backend OAuth не настроен. GitHub-only вход требует настроенного OAuth App.", false);
     return;
   }
   window.location.assign(`${API_BASE}/api/auth/github/start`);
@@ -4547,7 +4494,7 @@ async function enableGithubRepoMode() {
     return;
   }
   if (!runtimeConfig.githubRepoWrite) {
-    showGithubIntegrationMessage("Backend OAuth сейчас без public_repo. Для режима без сервера вставь token выше.");
+    showGithubIntegrationMessage("Backend OAuth сейчас без public_repo. Для прямой записи в repo вставь token выше.");
     return;
   }
   if (!currentUser.github.canWriteRepo) {
@@ -4611,121 +4558,6 @@ async function disableGithubRepoMode() {
   }
 }
 
-async function submitLocalAuth(mode, { username, email, password, identity }) {
-  if (!password || password.length < 6) {
-    showAuthStatus("Оффлайн-профиль тоже требует пароль минимум 6 символов.");
-    return;
-  }
-
-  const users = loadLocalUsers();
-  const normalizedIdentity = normalizeIdentity(identity);
-  if (mode === "register") {
-    const normalizedUsername = normalizeIdentity(username);
-    const normalizedEmail = normalizeIdentity(email);
-    if (!normalizedUsername || !normalizedEmail) {
-      showAuthStatus("Для локальной регистрации нужны логин и почта.");
-      return;
-    }
-    if (users.some((user) => normalizeIdentity(user.username) === normalizedUsername)) {
-      showAuthStatus("Такой локальный логин уже есть.");
-      return;
-    }
-    if (users.some((user) => normalizeIdentity(user.email) === normalizedEmail)) {
-      showAuthStatus("Такая локальная почта уже есть.");
-      return;
-    }
-    users.push({
-      username,
-      email,
-      passwordHash: await hashPassword(password),
-      createdAt: new Date().toISOString(),
-    });
-    saveLocalUsers(users);
-    setLocalCurrentUser(username);
-    saveLocalProgressForUser(username);
-    currentUser = { username, email, local: true };
-    renderAll();
-    renderLeaderboard([]);
-    closeAuthModal();
-    showAuthStatus("Онлайн API недоступен, создан локальный профиль. Прогресс хранится на этом устройстве.", true);
-    return;
-  }
-
-  const user = users.find(
-    (item) => normalizeIdentity(item.username) === normalizedIdentity || normalizeIdentity(item.email) === normalizedIdentity,
-  );
-  if (!user) {
-    showAuthStatus("Онлайн API недоступен, и такого локального профиля нет. Создай аккаунт локально.");
-    return;
-  }
-  if (user.passwordHash !== (await hashPassword(password))) {
-    showAuthStatus("Пароль локального профиля не совпал.");
-    return;
-  }
-  setLocalCurrentUser(user.username);
-  currentUser = { username: user.username, email: user.email, local: true };
-  loadLocalProgressForUser(user.username);
-  renderAll();
-  renderLeaderboard([]);
-  closeAuthModal();
-  showAuthStatus("Вошёл в локальный профиль. Работает полностью оффлайн.", true);
-}
-
-async function bootstrapLocalAccount() {
-  const username = localStorage.getItem(LOCAL_CURRENT_USER_KEY);
-  if (!username) return;
-  const user = loadLocalUsers().find((item) => item.username === username);
-  if (!user) {
-    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
-    return;
-  }
-  currentUser = { username: user.username, email: user.email, local: true };
-  loadLocalProgressForUser(user.username);
-  renderAll();
-}
-
-function loadLocalUsers() {
-  try {
-    const users = JSON.parse(localStorage.getItem(LOCAL_USERS_KEY));
-    return Array.isArray(users) ? users : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalUsers(users) {
-  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
-}
-
-function setLocalCurrentUser(username) {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.setItem(LOCAL_CURRENT_USER_KEY, username);
-}
-
-function loadLocalProgressForUser(username) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(`${LOCAL_PROGRESS_PREFIX}${username}`));
-    if (!saved) return;
-    isApplyingRemote = true;
-    state = { ...state, ...saved };
-    currentTopicId = state.currentTopicId || currentTopicId;
-    currentLessonIndex = state.currentLessonIndex || currentLessonIndex;
-    currentScreen = state.currentScreen || currentScreen;
-    isApplyingRemote = false;
-  } catch {
-    // Local profile can start with current device progress.
-  }
-}
-
-function saveLocalProgressForUser(username) {
-  if (!username) return;
-  localStorage.setItem(`${LOCAL_PROGRESS_PREFIX}${username}`, JSON.stringify(state));
-}
-
-function normalizeIdentity(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
 async function loadRuntimeConfig() {
   try {
     const data = await apiRequest("/api/config", { skipAuth: true });
@@ -4740,75 +4572,17 @@ async function loadRuntimeConfig() {
   renderAuthUi();
 }
 
-async function hashPassword(password) {
-  const bytes = new TextEncoder().encode(password);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function scheduleAuthChecks() {
-  clearTimeout(authCheckTimer);
-  authCheckTimer = setTimeout(checkAuthAvailability, 260);
-}
-
-function setAuthHint(element, text, state = "") {
-  if (!element) return;
-  element.textContent = text;
-  element.className = `auth-hint ${state ? `is-${state}` : ""}`;
-}
-
-async function checkAuthAvailability() {
-  const username = els.authUsername?.value.trim() || "";
-  const email = els.authEmail?.value.trim() || "";
-
-  if (!username) {
-    setAuthHint(els.authUsernameHint, "3-24 символа: буквы, цифры, _-.");
-  } else if (username.length < 3) {
-    setAuthHint(els.authUsernameHint, "Коротковато: минимум 3 символа.", "bad");
-  } else {
-    try {
-      const data = await apiRequest(`/api/check-username?username=${encodeURIComponent(username)}`, { skipAuth: true });
-      setAuthHint(els.authUsernameHint, data.message || (data.available ? "Свободен" : "Уже занят"), data.available ? "good" : "bad");
-    } catch {
-      setAuthHint(els.authUsernameHint, "Проверю при создании аккаунта.");
-    }
-  }
-
-  if (!email) {
-    setAuthHint(els.authEmailHint, "Нужна при создании аккаунта. Войти можно по логину или почте.");
-  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    setAuthHint(els.authEmailHint, "Похоже, в почте ошибка.", "bad");
-  } else {
-    try {
-      const data = await apiRequest(`/api/check-email?email=${encodeURIComponent(email)}`, { skipAuth: true });
-      setAuthHint(els.authEmailHint, data.message || (data.available ? "Почта свободна" : "Почта уже занята"), data.available ? "good" : "bad");
-    } catch {
-      setAuthHint(els.authEmailHint, "Проверю при создании аккаунта.");
-    }
-  }
-}
-
 async function logout() {
-  if (currentUser?.local) {
-    localStorage.removeItem(LOCAL_CURRENT_USER_KEY);
-    currentUser = null;
-    renderAuthUi();
-    renderLeaderboard([]);
-    showAuthStatus("Вышел из локального профиля. Прогресс остался на устройстве.", true);
-    return;
-  }
   try {
     await apiRequest("/api/logout", { method: "POST" });
   } catch {
-    // Token may already be dead; local logout is still useful.
+    // Token or cookie may already be dead; local UI logout is still useful.
   }
   localStorage.removeItem(AUTH_TOKEN_KEY);
   currentUser = null;
   renderAuthUi();
   renderLeaderboard([]);
-  showAuthStatus("Вышел из аккаунта. Локальный прогресс остался на устройстве.", true);
+  showAuthStatus("Вышел из аккаунта.", true);
 }
 
 async function bootstrapAccount() {
@@ -4821,15 +4595,12 @@ async function bootstrapAccount() {
     return;
   }
   if (authResult === "github-error") {
-    showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз или войди по паролю.");
+    showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз.");
     history.replaceState(null, "", window.location.pathname);
   }
   if (!token) {
     const cookieAccount = await bootstrapCookieAccount();
-    if (!cookieAccount) {
-      await bootstrapLocalAccount();
-      fetchLeaderboard();
-    }
+    if (!cookieAccount) fetchLeaderboard();
     return;
   }
   try {
@@ -4843,7 +4614,6 @@ async function bootstrapAccount() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     currentUser = null;
     renderAuthUi();
-    await bootstrapLocalAccount();
     fetchLeaderboard();
   }
 }
@@ -4860,9 +4630,8 @@ async function bootstrapGithubAccount() {
   } catch {
     currentUser = null;
     renderAuthUi();
-    await bootstrapLocalAccount();
     fetchLeaderboard();
-    showAuthStatus("GitHub-сессия не подтянулась. Проверь настройки сервера или войди по паролю.");
+    showAuthStatus("GitHub-сессия не подтянулась. Проверь настройки backend OAuth.");
   } finally {
     history.replaceState(null, "", window.location.pathname);
   }
@@ -4898,24 +4667,21 @@ function mergeRemoteProgress(progress) {
 
 function renderAuthUi({ skipGate = false } = {}) {
   if (!els.accountButton) return;
-  const provider = currentUser?.github?.login ? " · GitHub" : currentUser?.local ? " · local" : "";
+  const provider = currentUser?.github?.login ? " · GitHub" : "";
   const locked = isAuthLocked();
   document.body.classList.toggle("auth-required", locked);
-  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "Регистрация";
+  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "GitHub вход";
   if (els.authModal) els.authModal.dataset.locked = locked ? "true" : "false";
   if (els.authCloseButton) els.authCloseButton.hidden = locked;
   if (els.logoutButton) els.logoutButton.hidden = !currentUser;
-  if (els.loginButton) els.loginButton.hidden = Boolean(currentUser);
-  if (els.registerButton) els.registerButton.hidden = Boolean(currentUser);
   if (els.githubLoginButton) {
     els.githubLoginButton.hidden = Boolean(currentUser);
-    els.githubLoginButton.disabled = Boolean(currentUser);
     els.githubLoginButton.classList.toggle("is-unavailable", !runtimeConfig.githubOAuth && !currentUser);
   }
   if (els.githubAuthHint) {
     els.githubAuthHint.textContent = runtimeConfig.githubOAuth
       ? "GitHub создаст аккаунт автоматически и привяжет профиль."
-      : "OAuth нужен backend; оффлайн можно создать локальный аккаунт.";
+      : "Backend OAuth не настроен: нужны GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET.";
   }
   renderGithubIntegration();
   if (locked && !skipGate && els.authModal?.hidden) openAuthModal();
@@ -4945,9 +4711,9 @@ function renderGithubIntegration() {
   } else if (connected) {
     els.githubIntegrationSubtitle.textContent = `@${currentUser.github.login || currentUser.username}`;
   } else if (runtimeConfig.githubOAuth) {
-    els.githubIntegrationSubtitle.textContent = currentUser ? "Можно привязать GitHub к текущему аккаунту." : "Войди через GitHub или привяжи его после регистрации.";
+    els.githubIntegrationSubtitle.textContent = currentUser ? "GitHub уже основной способ входа." : "Войди через GitHub, аккаунт MLingo создастся автоматически.";
   } else {
-    els.githubIntegrationSubtitle.textContent = "Вставь GitHub token для режима без сервера.";
+    els.githubIntegrationSubtitle.textContent = "Вставь GitHub token для прямой записи в repo.";
   }
   if (els.githubConnectButton) els.githubConnectButton.hidden = connected || !runtimeConfig.githubOAuth;
   if (els.githubTokenClearButton) els.githubTokenClearButton.hidden = !directToken;
@@ -5265,7 +5031,7 @@ async function syncSolutionIfEnabled(lesson, firstPass) {
   if (!solutionEligible(lesson)) return;
   const answer = captureSolutionAnswer(lesson).trim();
   if (!answer) return;
-  if (!currentUser?.github?.repo?.enabled || currentUser.local) return;
+  if (!currentUser?.github?.repo?.enabled) return;
   try {
     const data = await apiRequest("/api/github/solutions", {
       method: "POST",
@@ -5287,10 +5053,6 @@ async function syncSolutionIfEnabled(lesson, firstPass) {
     appendFeedbackNote(`GitHub sync не прошёл: ${error.message}`, false);
     showGithubIntegrationMessage(error.message);
   }
-}
-
-function shouldUseLocalAuthFallback(error) {
-  return Boolean(error?.offline || error?.status === 404 || error?.status === 405 || error?.message === "API недоступен");
 }
 
 function renderLeaderboard(items = []) {
@@ -5321,16 +5083,13 @@ async function fetchLeaderboard() {
 }
 
 function queueProgressSync() {
-  if (!currentUser || currentUser.local || isApplyingRemote) {
-    if (currentUser?.local) saveLocalProgressForUser(currentUser.username);
-    return;
-  }
+  if (!currentUser || isApplyingRemote) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncProgressNow, 550);
 }
 
 async function syncProgressNow() {
-  if (!currentUser || currentUser.local) return;
+  if (!currentUser) return;
   try {
     const data = await apiRequest("/api/progress", {
       method: "PUT",
@@ -5346,12 +5105,12 @@ async function syncProgressNow() {
     }
     renderLeaderboard(data.leaderboard);
   } catch {
-    // Keep offline/local progress. Next successful action will sync again.
+    // Keep device progress. Next successful action will sync again.
   }
 }
 
 async function sendEvent(lessonId, correct, xpDelta) {
-  if (!currentUser || currentUser.local) return;
+  if (!currentUser) return;
   try {
     await apiRequest("/api/event", { method: "POST", body: { lessonId, correct, xpDelta } });
   } catch {
