@@ -97,6 +97,15 @@ python3 server.py --port 4180
 - iOS Safari: `Share` -> `Add to Home Screen`;
 - Android Chrome: меню -> `Install app` или `Add to Home screen`.
 
+Android APK можно раздавать через GitHub Releases:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Workflow `release-apk` соберет `MLingo-v0.1.0-debug.apk` и прикрепит его к Release. Подробности: [docs/apps.md](docs/apps.md).
+
 ## Деплой
 
 Рекомендуемый путь для первого публичного запуска:

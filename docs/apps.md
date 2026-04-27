@@ -59,6 +59,27 @@ Install to a connected phone:
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## GitHub Releases для APK
+
+APK не нужно хранить в git. В репе есть workflow `.github/workflows/release-apk.yml`: он собирает Android debug APK и прикрепляет его к GitHub Release.
+
+Сделать новый релиз:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+После завершения GitHub Actions файл появится здесь:
+
+```text
+GitHub repo -> Releases -> v0.1.0 -> Assets -> MLingo-v0.1.0-debug.apk
+```
+
+Если tag уже существует, можно открыть `Actions -> release-apk -> Run workflow`, вписать tag, например `v0.1.0`, и workflow перезальет APK в существующий Release.
+
+Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
+
 ## macOS app options
 
 Fastest useful option: install the PWA from Chrome/Safari once the site is hosted. It will cache lessons and progress locally.

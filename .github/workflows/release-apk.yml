@@ -1,0 +1,61 @@
+name: release-apk
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to publish, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+      - run: yes | sdkmanager --licenses || true
+      - run: sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - run: npm run check
+      - run: npm run android:test
+      - run: npm run android:debug
+
+      - id: apk
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/MLingo-${RELEASE_TAG}-debug.apk"
+          echo "path=dist/MLingo-${RELEASE_TAG}-debug.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${{ steps.apk.outputs.path }}#MLingo Android APK (debug)" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${{ steps.apk.outputs.path }}#MLingo Android APK (debug)" --verify-tag --generate-notes
+          fi
