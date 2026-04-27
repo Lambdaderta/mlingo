@@ -13,7 +13,9 @@ from datetime import date, timedelta
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 import psycopg
 from psycopg.rows import dict_row
@@ -25,6 +27,15 @@ ALLOWED_ORIGIN = os.environ.get("MLINGO_ALLOWED_ORIGIN", "")
 SESSION_TTL = 60 * 60 * 24 * 30
 PBKDF2_ITERATIONS = 220_000
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "").strip()
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "").strip()
+GITHUB_OAUTH_REDIRECT_URI = os.environ.get("GITHUB_OAUTH_REDIRECT_URI", "").strip()
+GITHUB_OAUTH_SCOPES = os.environ.get("GITHUB_OAUTH_SCOPES", "read:user user:email").strip()
+GITHUB_STATE_COOKIE = "mlingo_github_state"
+GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_API_URL = "https://api.github.com"
+OAUTH_STATE_TTL = 60 * 10
 
 
 def now_ts():
@@ -47,12 +58,21 @@ def init_db():
               id bigserial primary key,
               username text not null unique,
               email text,
-              password_hash text not null,
+              password_hash text,
+              auth_provider text not null default 'password',
+              github_id bigint,
+              github_login text,
+              github_avatar_url text,
               created_at bigint not null
             )
             """
         )
         db.execute("alter table users add column if not exists email text")
+        db.execute("alter table users alter column password_hash drop not null")
+        db.execute("alter table users add column if not exists auth_provider text not null default 'password'")
+        db.execute("alter table users add column if not exists github_id bigint")
+        db.execute("alter table users add column if not exists github_login text")
+        db.execute("alter table users add column if not exists github_avatar_url text")
         db.execute(
             """
             create table if not exists sessions (
@@ -93,6 +113,7 @@ def init_db():
         db.execute("create index if not exists events_user_created_idx on events(user_id, created_at desc)")
         db.execute("create index if not exists progress_leaderboard_idx on progress(xp desc, streak desc, completed_count desc, updated_at asc)")
         db.execute("create unique index if not exists users_email_lower_unique_idx on users (lower(email)) where email is not null")
+        db.execute("create unique index if not exists users_github_id_unique_idx on users (github_id) where github_id is not null")
 
 
 def read_json(handler):
@@ -165,12 +186,19 @@ def state_stats(state):
 
 
 def public_user(row):
-    return {
+    user = {
         "id": row["id"],
         "username": row["username"],
         "email": row.get("email"),
         "createdAt": row["created_at"],
     }
+    if row.get("github_id"):
+        user["github"] = {
+            "id": row.get("github_id"),
+            "login": row.get("github_login"),
+            "avatarUrl": row.get("github_avatar_url"),
+        }
+    return user
 
 
 def parse_state_json(value):
@@ -257,6 +285,110 @@ def cleanup_sessions(db):
     db.execute("delete from sessions where expires_at <= %s", (now_ts(),))
 
 
+def github_oauth_configured():
+    return bool(GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET)
+
+
+def github_json_request(url, token=None, data=None):
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "MLingo",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    raw_data = None
+    if data is not None:
+        raw_data = urlencode(data).encode("utf-8")
+        headers["Accept"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, data=raw_data, headers=headers)
+    try:
+        with urlopen(request, timeout=12) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"GitHub вернул {exc.code}: {detail[:180]}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"GitHub недоступен: {exc.reason}") from exc
+
+
+def pick_verified_github_email(emails):
+    primary_verified = [
+        item.get("email")
+        for item in emails
+        if item.get("verified") and item.get("primary") and item.get("email")
+    ]
+    if primary_verified:
+        return normalize_email(primary_verified[0])
+    verified = [item.get("email") for item in emails if item.get("verified") and item.get("email")]
+    return normalize_email(verified[0]) if verified else None
+
+
+def unique_github_username(db, login, github_id):
+    base = normalize_username(login or "") or f"github-{github_id}"
+    base = base[:24].strip(".-_") or f"github-{github_id}"
+    candidate = base
+    suffix = 0
+    while True:
+        existing = db.execute("select github_id from users where username = %s", (candidate,)).fetchone()
+        if not existing or existing.get("github_id") == github_id:
+            return candidate
+        suffix += 1
+        tail = f"-gh{str(github_id)[-4:]}{suffix if suffix > 1 else ''}"
+        candidate = f"{base[:24 - len(tail)]}{tail}"
+
+
+def upsert_github_user(db, profile, email):
+    github_id = int(profile["id"])
+    github_login = str(profile.get("login") or f"github-{github_id}")
+    avatar_url = profile.get("avatar_url")
+    current = now_ts()
+    existing = db.execute("select * from users where github_id = %s", (github_id,)).fetchone()
+    if existing:
+        row = db.execute(
+            """
+            update users
+            set email = coalesce(%s, email),
+                github_login = %s,
+                github_avatar_url = %s,
+                auth_provider = case when password_hash is null then 'github' else auth_provider end
+            where id = %s
+            returning *
+            """,
+            (email, github_login, avatar_url, existing["id"]),
+        ).fetchone()
+        return row
+
+    linked = None
+    if email:
+        linked = db.execute("select * from users where lower(email) = lower(%s)", (email,)).fetchone()
+    if linked and not linked.get("github_id"):
+        return db.execute(
+            """
+            update users
+            set github_id = %s,
+                github_login = %s,
+                github_avatar_url = %s,
+                auth_provider = case when password_hash is null then 'github' else auth_provider end
+            where id = %s
+            returning *
+            """,
+            (github_id, github_login, avatar_url, linked["id"]),
+        ).fetchone()
+    if linked and linked.get("github_id") != github_id:
+        email = None
+
+    username = unique_github_username(db, github_login, github_id)
+    return db.execute(
+        """
+        insert into users (username, email, password_hash, auth_provider, github_id, github_login, github_avatar_url, created_at)
+        values (%s, %s, null, 'github', %s, %s, %s, %s)
+        returning *
+        """,
+        (username, email, github_id, github_login, avatar_url, current),
+    ).fetchone()
+
+
 class MLingoHandler(SimpleHTTPRequestHandler):
     server_version = "MLingo/0.2"
 
@@ -320,6 +452,17 @@ class MLingoHandler(SimpleHTTPRequestHandler):
     def send_error_json(self, status, message):
         self.send_json(status, {"ok": False, "error": message})
 
+    def send_redirect(self, location, token=None, state=None, clear_state=False):
+        self.send_response(HTTPStatus.FOUND)
+        self.send_header("Location", location)
+        if token:
+            self.send_header("Set-Cookie", f"mlingo_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}")
+        if state:
+            self.send_header("Set-Cookie", f"{GITHUB_STATE_COOKIE}={state}; Path=/; HttpOnly; SameSite=Lax; Max-Age={OAUTH_STATE_TTL}")
+        if clear_state:
+            self.send_header("Set-Cookie", f"{GITHUB_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+        self.end_headers()
+
     def auth_token(self):
         auth = self.headers.get("Authorization") or ""
         if auth.lower().startswith("bearer "):
@@ -358,14 +501,88 @@ class MLingoHandler(SimpleHTTPRequestHandler):
         )
         return token
 
+    def cookie_value(self, name):
+        cookie = http.cookies.SimpleCookie(self.headers.get("Cookie"))
+        if name in cookie:
+            return cookie[name].value
+        return None
+
+    def external_url(self, path):
+        if path == "/api/auth/github/callback" and GITHUB_OAUTH_REDIRECT_URI:
+            return GITHUB_OAUTH_REDIRECT_URI
+        proto = self.headers.get("X-Forwarded-Proto") or "http"
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or f"localhost:{self.server.server_port}"
+        return f"{proto}://{host}{path}"
+
+    def handle_github_start(self):
+        if not github_oauth_configured():
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, "GitHub OAuth не настроен на сервере")
+            return
+        state = secrets.token_urlsafe(32)
+        params = {
+            "client_id": GITHUB_CLIENT_ID,
+            "redirect_uri": self.external_url("/api/auth/github/callback"),
+            "scope": GITHUB_OAUTH_SCOPES,
+            "state": state,
+        }
+        self.send_redirect(f"{GITHUB_AUTH_URL}?{urlencode(params)}", state=state)
+
+    def handle_github_callback(self, db, parsed_url):
+        if not github_oauth_configured():
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, "GitHub OAuth не настроен на сервере")
+            return
+        query = parse_qs(parsed_url.query)
+        code = str((query.get("code") or [""])[0])
+        state = str((query.get("state") or [""])[0])
+        expected_state = self.cookie_value(GITHUB_STATE_COOKIE)
+        if not code or not state or not expected_state or not hmac.compare_digest(state, expected_state):
+            self.send_redirect("/app?auth=github-error", clear_state=True)
+            return
+
+        token_payload = github_json_request(
+            GITHUB_TOKEN_URL,
+            data={
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": self.external_url("/api/auth/github/callback"),
+            },
+        )
+        access_token = token_payload.get("access_token")
+        if not access_token:
+            self.send_redirect("/app?auth=github-error", clear_state=True)
+            return
+
+        profile = github_json_request(f"{GITHUB_API_URL}/user", token=access_token)
+        email = normalize_email(str(profile.get("email") or "")) or None
+        if not email:
+            emails = github_json_request(f"{GITHUB_API_URL}/user/emails", token=access_token)
+            email = pick_verified_github_email(emails if isinstance(emails, list) else [])
+        user = upsert_github_user(db, profile, email)
+        save_progress(db, user["id"], get_progress(db, user["id"])["state"])
+        token = self.create_session(db, user["id"])
+        self.send_redirect("/app?auth=github", token=token, clear_state=True)
+
     def handle_api(self, method):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
         try:
             with db_connect() as db:
+                if path == "/api/auth/github/start" and method == "GET":
+                    self.handle_github_start()
+                    return
+
+                if path == "/api/auth/github/callback" and method == "GET":
+                    self.handle_github_callback(db, parsed_url)
+                    return
+
                 if path == "/api/health" and method == "GET":
                     db.execute("select 1").fetchone()
                     self.send_json(HTTPStatus.OK, {"ok": True, "database": "postgres"})
+                    return
+
+                if path == "/api/config" and method == "GET":
+                    self.send_json(HTTPStatus.OK, {"ok": True, "githubOAuth": github_oauth_configured()})
                     return
 
                 if path == "/api/check-username" and method == "GET":
@@ -435,7 +652,7 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     else:
                         username = normalize_username(identity)
                         user = db.execute("select * from users where username = %s", (username,)).fetchone()
-                    if not user or not verify_password(password, user["password_hash"]):
+                    if not user or not user.get("password_hash") or not verify_password(password, user["password_hash"]):
                         self.send_error_json(HTTPStatus.UNAUTHORIZED, "Неверный логин или пароль")
                         return
                     token = self.create_session(db, user["id"])

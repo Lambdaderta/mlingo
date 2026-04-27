@@ -21,6 +21,7 @@ function extractStringsFromArray(source, constName) {
 
 const html = read("index.html");
 const app = read("app.js");
+const server = read("server.py");
 const sw = read("service-worker.js");
 const packageJson = readJson("package.json");
 const capacitorConfig = readJson("capacitor.config.json");
@@ -31,6 +32,7 @@ assert.ok(html.includes('id="packSourceInput"'), "index.html should include GitH
 assert.ok(html.includes('id="packSyncButton"'), "index.html should include GitHub pack sync button");
 assert.ok(html.includes('id="packExportButton"'), "index.html should include pack export button");
 assert.ok(html.includes('id="packImportButton"'), "index.html should include pack import button");
+assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -60,9 +62,16 @@ for (const pack of packIndex.packs) {
 }
 
 assert.ok(app.includes("async function syncLessonPacksFromGithub"), "app should include GitHub lesson sync");
+assert.ok(app.includes("async function loadRuntimeConfig"), "app should load runtime backend config");
+assert.ok(app.includes("function startGithubLogin"), "app should include GitHub login flow");
+assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
 assert.ok(app.includes("async function submitLocalAuth"), "app should include offline local auth fallback");
 assert.ok(app.includes("function saveLocalProgressForUser"), "app should save local account progress");
+assert.ok(server.includes("/api/auth/github/start"), "server should expose GitHub OAuth start endpoint");
+assert.ok(server.includes("/api/auth/github/callback"), "server should expose GitHub OAuth callback endpoint");
+assert.ok(server.includes("/api/config"), "server should expose runtime config endpoint");
+assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 
 assert.equal(capacitorConfig.appId, "io.mlingo.app", "Capacitor appId should be stable");
 assert.equal(capacitorConfig.appName, "MLingo", "Capacitor appName should be stable");

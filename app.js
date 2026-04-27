@@ -3378,10 +3378,12 @@ let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
 let authCheckTimer = null;
+let runtimeConfig = { githubOAuth: false };
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
   bindEvents();
+  loadRuntimeConfig();
   loadLessonPacks().then(() => {
     ensureValidTopicSelection();
     renderAll();
@@ -3441,6 +3443,7 @@ function cacheElements() {
     "loginButton",
     "registerButton",
     "logoutButton",
+    "githubLoginButton",
     "authStatus",
     "leaderboardList",
     "packExportButton",
@@ -3486,6 +3489,7 @@ function bindEvents() {
   els.loginButton?.addEventListener("click", () => submitAuth("login"));
   els.registerButton?.addEventListener("click", () => submitAuth("register"));
   els.logoutButton?.addEventListener("click", logout);
+  els.githubLoginButton?.addEventListener("click", startGithubLogin);
   els.authUsername?.addEventListener("input", scheduleAuthChecks);
   els.authEmail?.addEventListener("input", scheduleAuthChecks);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
@@ -4429,6 +4433,14 @@ async function submitAuth(mode) {
   }
 }
 
+function startGithubLogin() {
+  if (!runtimeConfig.githubOAuth) {
+    showAuthStatus("GitHub-вход пока не настроен на сервере. Можно войти по логину/почте или создать локальный профиль.");
+    return;
+  }
+  window.location.assign(`${API_BASE}/api/auth/github/start`);
+}
+
 async function submitLocalAuth(mode, { username, email, password, identity }) {
   if (!password || password.length < 6) {
     showAuthStatus("Оффлайн-профиль тоже требует пароль минимум 6 символов.");
@@ -4541,6 +4553,16 @@ function normalizeIdentity(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+async function loadRuntimeConfig() {
+  try {
+    const data = await apiRequest("/api/config", { skipAuth: true });
+    runtimeConfig = { ...runtimeConfig, githubOAuth: Boolean(data.githubOAuth) };
+  } catch {
+    runtimeConfig = { ...runtimeConfig, githubOAuth: false };
+  }
+  renderAuthUi();
+}
+
 async function hashPassword(password) {
   const bytes = new TextEncoder().encode(password);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -4615,9 +4637,22 @@ async function logout() {
 async function bootstrapAccount() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   renderAuthUi();
+  const authResult = new URLSearchParams(window.location.search).get("auth");
+  if (authResult === "github") {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    await bootstrapGithubAccount();
+    return;
+  }
+  if (authResult === "github-error") {
+    showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз или войди по паролю.");
+    history.replaceState(null, "", window.location.pathname);
+  }
   if (!token) {
-    await bootstrapLocalAccount();
-    fetchLeaderboard();
+    const cookieAccount = await bootstrapCookieAccount();
+    if (!cookieAccount) {
+      await bootstrapLocalAccount();
+      fetchLeaderboard();
+    }
     return;
   }
   try {
@@ -4636,6 +4671,42 @@ async function bootstrapAccount() {
   }
 }
 
+async function bootstrapGithubAccount() {
+  try {
+    const data = await apiRequest("/api/me", { skipAuth: true });
+    currentUser = data.user;
+    mergeRemoteProgress(data.progress);
+    renderAll();
+    renderLeaderboard(data.leaderboard);
+    queueProgressSync();
+    showAuthStatus("Вошёл через GitHub. Прогресс синхронизирован.", true);
+  } catch {
+    currentUser = null;
+    renderAuthUi();
+    await bootstrapLocalAccount();
+    fetchLeaderboard();
+    showAuthStatus("GitHub-сессия не подтянулась. Проверь настройки сервера или войди по паролю.");
+  } finally {
+    history.replaceState(null, "", window.location.pathname);
+  }
+}
+
+async function bootstrapCookieAccount() {
+  try {
+    const data = await apiRequest("/api/me", { skipAuth: true });
+    currentUser = data.user;
+    mergeRemoteProgress(data.progress);
+    renderAll();
+    renderLeaderboard(data.leaderboard);
+    queueProgressSync();
+    return true;
+  } catch {
+    currentUser = null;
+    renderAuthUi();
+    return false;
+  }
+}
+
 function mergeRemoteProgress(progress) {
   if (!progress?.state) return;
   const remote = progress.state;
@@ -4650,10 +4721,12 @@ function mergeRemoteProgress(progress) {
 
 function renderAuthUi() {
   if (!els.accountButton) return;
-  els.accountButton.textContent = currentUser ? `@${currentUser.username}${currentUser.local ? " · local" : ""}` : "Войти";
+  const provider = currentUser?.github?.login ? " · GitHub" : currentUser?.local ? " · local" : "";
+  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "Войти";
   if (els.logoutButton) els.logoutButton.hidden = !currentUser;
   if (els.loginButton) els.loginButton.hidden = Boolean(currentUser);
   if (els.registerButton) els.registerButton.hidden = Boolean(currentUser);
+  if (els.githubLoginButton) els.githubLoginButton.hidden = Boolean(currentUser) || !runtimeConfig.githubOAuth;
 }
 
 function shouldUseLocalAuthFallback(error) {

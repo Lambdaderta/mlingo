@@ -1029,6 +1029,17 @@ textarea:focus-visible {
   justify-content: flex-start;
 }
 
+.github-button {
+  border-color: rgba(250, 250, 250, 0.18);
+  background: #111;
+  color: var(--ink);
+}
+
+.github-button:hover {
+  border-color: rgba(211, 173, 95, 0.46);
+  background: #171717;
+}
+
 .icon-button {
   min-width: 2.45rem;
   padding-inline: 0.75rem;

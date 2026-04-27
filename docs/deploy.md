@@ -11,6 +11,7 @@ Browser / PWA
        -> static files: index.html, app.js, styles.css
        -> API: /api/*
        -> Postgres
+       -> GitHub OAuth, если включен вход через GitHub
 ```
 
 Для первых 100 активных пользователей этого более чем достаточно. Главный узкий участок на старте — не PostgreSQL, а качество задач, удобство добавления контента и стабильность пользовательского опыта.
@@ -45,6 +46,7 @@ Browser / PWA
    - `DATABASE_URL` — internal connection string от Render PostgreSQL;
    - `MLINGO_ALLOWED_ORIGIN` — сначала `https://YOUR-SERVICE.onrender.com`, потом свой домен;
    - `PORT` — Render обычно сам дает порт через env, можно не задавать.
+   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI` — после создания GitHub OAuth App.
 5. Нажми Deploy.
 6. Открой `https://YOUR-SERVICE.onrender.com/api/health`, должно быть:
 
@@ -60,6 +62,7 @@ Browser / PWA
 4. В web service добавь переменные окружения:
    - `DATABASE_URL` из PostgreSQL variables;
    - `MLINGO_ALLOWED_ORIGIN=https://YOUR-DOMAIN`;
+   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI`, если нужен GitHub-вход.
 5. Укажи старт через Dockerfile.
 6. Создай Railway domain или custom domain.
 
@@ -103,9 +106,38 @@ railway domain
 https://mlingo.app
 ```
 
+## Вход через GitHub
+
+MLingo поддерживает GitHub OAuth как способ входа, похожий на TensorTonic: пользователь нажимает GitHub, подтверждает доступ, а прогресс хранится в базе MLingo. Для этого не нужны права на запись в репозитории.
+
+1. Открой GitHub → Settings → Developer settings → OAuth Apps → New OAuth App.
+2. Укажи:
+   - Application name: `MLingo`;
+   - Homepage URL: `https://mlingo.app`;
+   - Authorization callback URL: `https://mlingo.app/api/auth/github/callback`.
+3. Скопируй `Client ID`.
+4. Сгенерируй `Client secret`.
+5. В хостинге добавь переменные:
+
+```text
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+GITHUB_OAUTH_REDIRECT_URI=https://mlingo.app/api/auth/github/callback
+GITHUB_OAUTH_SCOPES=read:user user:email
+```
+
+Для локальной разработки callback:
+
+```text
+http://localhost:4180/api/auth/github/callback
+```
+
+Идею “коммитить каждую решенную задачу в GitHub” лучше включать позже отдельным opt-in режимом. Для этого понадобится GitHub App или OAuth с write-доступом, явное согласие пользователя и настройка репозитория, куда писать ledger прогресса.
+
 ## Перед публичным запуском
 
 - Проверь регистрацию и вход с телефона.
+- Проверь GitHub-вход на production-домене и на локальном callback.
 - Создай тестового пользователя и пройди 2-3 урока.
 - Проверь leaderboard.
 - Проверь установку PWA на iOS/Android.

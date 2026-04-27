@@ -8,7 +8,7 @@ MLingo — темный offline-first тренажер для ручного ML-
 
 - PWA-интерфейс для desktop и mobile.
 - Оффлайн-профили и локальное сохранение прогресса.
-- Опциональный backend на Python + PostgreSQL для аккаунтов, синхронизации и leaderboard.
+- Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, синхронизации и leaderboard.
 - JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
 - Android APK через Capacitor.
 - GitHub Actions для проверок и публикации APK в GitHub Releases.
@@ -51,12 +51,18 @@ python3 server.py --port 4180
 - `DATABASE_URL` — строка подключения к PostgreSQL.
 - `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.app`.
 - `PORT` — порт приложения, по умолчанию `4180`.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — данные GitHub OAuth App, если нужен вход через GitHub.
+- `GITHUB_OAUTH_REDIRECT_URI` — callback URL, например `https://mlingo.app/api/auth/github/callback`.
+- `GITHUB_OAUTH_SCOPES` — по умолчанию `read:user user:email`; write-доступ к репозиториям не запрашивается.
 
 ## API
 
 - `GET /api/health` — проверка состояния backend и базы.
+- `GET /api/config` — публичная runtime-конфигурация frontend.
 - `POST /api/register` — регистрация пользователя.
 - `POST /api/login` — вход.
+- `GET /api/auth/github/start` — старт GitHub OAuth.
+- `GET /api/auth/github/callback` — callback от GitHub OAuth.
 - `POST /api/logout` — выход.
 - `GET /api/me` — текущий пользователь.
 - `GET /api/progress` — загрузка прогресса.
@@ -64,7 +70,7 @@ python3 server.py --port 4180
 - `POST /api/event` — событие прохождения урока.
 - `GET /api/leaderboard` — таблица лидеров.
 
-В PostgreSQL хранятся пользователи, сессии, JSON прогресса, XP, стрики, ошибки, события уроков и leaderboard.
+В PostgreSQL хранятся пользователи, GitHub-связки, сессии, JSON прогресса, XP, стрики, ошибки, события уроков и leaderboard. Вход через GitHub используется как провайдер аккаунта, но не коммитит прогресс в GitHub.
 
 ## Структура проекта
 
