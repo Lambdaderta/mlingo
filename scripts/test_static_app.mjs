@@ -44,6 +44,9 @@ assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should inclu
 assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
 assert.ok(html.includes('id="githubTokenInput"'), "index.html should include serverless GitHub token input");
 assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include update checker button");
+assert.ok(html.includes("./assets/brand/mlingo-cat-logo-512.png"), "index.html should use the MLingo cat logo in the app shell");
+assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-readme-card.png")), "README card image should exist");
+assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-cat-logo-512.png")), "app logo image should exist");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -103,6 +106,8 @@ assert.ok(macosApp.includes("setMainMenu"), "macOS app should install a native m
 assert.ok(macosApp.includes("applicationShouldHandleReopen"), "macOS app should reopen from Dock like a native app");
 assert.ok(macosApp.includes("setFrameAutosaveName"), "macOS app should remember its window frame");
 assert.ok(macosBuildScript.includes("CFBundleShortVersionString $APP_VERSION"), "macOS bundle version should follow package.json");
+assert.ok(macosBuildScript.includes("MLingo.icns"), "macOS build should copy the app icon");
+assert.ok(fs.existsSync(path.join(root, "macos/MLingo.icns")), "macOS icns icon should exist");
 assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 
 assert.equal(capacitorConfig.appId, "io.mlingo.app", "Capacitor appId should be stable");

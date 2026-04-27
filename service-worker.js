@@ -1,4 +1,4 @@
-const CACHE_NAME = "mlingo-clean-v17";
+const CACHE_NAME = "mlingo-clean-v18";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,8 +9,10 @@ const ASSETS = [
   "./lesson-packs/cv-fundamentals-pack.json",
   "./lesson-packs/recsys-rerank-pack.json",
   "./lesson-packs/dl-advanced-pack.json",
+  "./lesson-packs/contest-expansion-pack.json",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./assets/brand/mlingo-cat-logo-512.png",
 ];
 
 self.addEventListener("install", (event) => {

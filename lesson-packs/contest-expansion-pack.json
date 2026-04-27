@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "id": "contest-expansion-pack-v1",
+  "title": "Contest Expansion Pack",
+  "description": "Extra drills for CV contests, recommender rerankers, transformers and diffusion implementation details.",
+  "topics": [
+    {
+      "id": "cv-contest-tricks",
+      "title": "CV: contest tricks",
+      "track": "Segmentation / Classification",
+      "tag": "cv",
+      "icon": "CT",
+      "color": "#c7a76a",
+      "copy": "Практичные мелочи, которые часто дают очки: TTA, threshold, morphology, class weights и sanity checks.",
+      "rules": [
+        "Любой postprocess подбирается только на validation",
+        "TTA нужно откатывать в исходную ориентацию до усреднения",
+        "Метрика должна повторять формат leaderboard"
+      ],
+      "lessons": [
+        {
+          "id": "cv-tta-flip-segmentation",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "TTA flip mask",
+          "prompt": "Напиши TTA для segmentation: предсказать original и horizontal flip, откатить flip и усреднить probabilities.",
+          "starter": "def tta_predict(model, x):",
+          "answer": "def tta_predict(model, x):\n    model.eval()\n    with torch.no_grad():\n        p1 = torch.sigmoid(model(x))\n        xf = torch.flip(x, dims=[3])\n        p2 = torch.sigmoid(model(xf))\n        p2 = torch.flip(p2, dims=[3])\n    return (p1 + p2) / 2",
+          "testsText": "Проверяется no_grad, sigmoid для logits и обратный flip по width axis.",
+          "hint": "Для BCHW horizontal flip идет по dimension 3.",
+          "explain": "TTA помогает, только если prediction после flip возвращена в исходную систему координат.",
+          "terms": ["tta", "threshold", "logits"]
+        },
+        {
+          "id": "cv-morph-open-close",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Morph cleanup",
+          "prompt": "Напиши postprocess binary mask через scipy: binary opening убирает точки, closing закрывает маленькие дырки.",
+          "starter": "def clean_mask(mask, iters=1):",
+          "answer": "def clean_mask(mask, iters=1):\n    from scipy import ndimage as ndi\n    mask = mask.astype(bool)\n    mask = ndi.binary_opening(mask, iterations=iters)\n    mask = ndi.binary_closing(mask, iterations=iters)\n    return mask.astype(np.uint8)",
+          "testsText": "Проверяется bool conversion и uint8 output.",
+          "hint": "Opening обычно удаляет мелкий foreground-шум, closing заращивает мелкие background-дыры.",
+          "explain": "Morphology может улучшить noisy segmentation, но размер операции надо выбирать по validation.",
+          "terms": ["mask", "postprocess"]
+        },
+        {
+          "id": "cv-resize-mask-nearest-bug",
+          "kind": "bug",
+          "difficulty": 3,
+          "title": "Resize mask bug",
+          "prompt": "Какая строка портит discrete mask labels?",
+          "lines": [
+            "img = img.resize((224, 224), resample=Image.BILINEAR)",
+            "mask = mask.resize((224, 224), resample=Image.BILINEAR)",
+            "x = torch.from_numpy(np.array(img)).permute(2, 0, 1).float() / 255",
+            "y = torch.from_numpy(np.array(mask) > 0).float()[None]"
+          ],
+          "answer": 1,
+          "hint": "Для label mask нельзя смешивать классы интерполяцией.",
+          "explain": "Image можно resize через bilinear, а mask лучше через nearest, чтобы не создавать промежуточные label values.",
+          "terms": ["mask", "augmentation"]
+        },
+        {
+          "id": "cv-class-weights-ce",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Class weights CE",
+          "prompt": "Напиши CrossEntropyLoss с весами классов, обратными частотам labels.",
+          "starter": "def make_weighted_ce(labels, num_classes, device):",
+          "answer": "def make_weighted_ce(labels, num_classes, device):\n    counts = torch.bincount(torch.as_tensor(labels), minlength=num_classes).float()\n    weights = counts.sum() / counts.clamp(min=1)\n    weights = weights / weights.mean()\n    return torch.nn.CrossEntropyLoss(weight=weights.to(device))",
+          "testsText": "Проверяется minlength, защита от нулевых классов и перенос weights на device.",
+          "hint": "Редкий класс должен получить больший вес, но нулевую частоту нельзя делить напрямую.",
+          "explain": "Class weights часто полезны для macro F1, особенно когда редкие классы теряются.",
+          "terms": ["cross_entropy", "f1"]
+        },
+        {
+          "id": "cv-probability-ensemble",
+          "kind": "write",
+          "difficulty": 2,
+          "title": "Probability ensemble",
+          "prompt": "У тебя есть список logits от нескольких classification models. Усредни probabilities и верни predicted class.",
+          "starter": "def ensemble_predict(logits_list):",
+          "answer": "def ensemble_predict(logits_list):\n    probs = [torch.softmax(logits, dim=1) for logits in logits_list]\n    mean_prob = torch.stack(probs).mean(dim=0)\n    return mean_prob.argmax(dim=1)",
+          "testsText": "Проверяется softmax до averaging и argmax по class dimension.",
+          "hint": "Усреднять probabilities безопаснее, чем argmax классы.",
+          "explain": "Даже слабые разные модели могут дать прирост через probability averaging.",
+          "terms": ["ensemble", "softmax"]
+        },
+        {
+          "id": "cv-contest-sanity-idea",
+          "kind": "idea",
+          "difficulty": 3,
+          "title": "CV sanity checklist",
+          "prompt": "Напиши короткий checklist sanity checks перед первым submit CV segmentation.",
+          "context": "Есть dataloader, модель, validation и submission mask writer. Нужно быстро поймать самые частые ошибки.",
+          "rubric": [
+            {"label": "shape/layout", "keywords": ["shape", "layout", "chw", "bchw", "размер"]},
+            {"label": "mask format", "keywords": ["mask", "0", "1", "uint8", "threshold"]},
+            {"label": "visualization", "keywords": ["визуал", "show", "plot", "overlay"]},
+            {"label": "validation", "keywords": ["validation", "metric", "iou", "dice"]},
+            {"label": "submission format", "keywords": ["submission", "format", "id", "csv"]}
+          ],
+          "minRubric": 4,
+          "minWords": 45,
+          "hint": "Хороший checklist ловит ошибки формата до долгих экспериментов.",
+          "explain": "В CV-контестах много очков теряется не на архитектуре, а на resize, threshold, id order и формате масок.",
+          "reference": "Сильный checklist: проверить BCHW/HWC, диапазон image, mask 0/1, visualize overlay нескольких train/valid predictions, сравнить локальный IoU/Dice, проверить размер restored mask, порядок ids и формат submission.",
+          "terms": ["mask", "validation"]
+        }
+      ]
+    },
+    {
+      "id": "rerank-practical-advanced",
+      "title": "Rerankers: практика",
+      "track": "Features / Metrics / Leakage",
+      "tag": "recsys",
+      "icon": "RR",
+      "color": "#8ea4c7",
+      "copy": "Задачи про реальные двухстадийные пайплайны: blend candidates, per-user rank, temporal features и negatives.",
+      "rules": [
+        "Reranker обучается на candidate pairs, а не на всех item",
+        "Features считаются с cutoff по времени",
+        "Финальный submission обычно сортируется внутри каждого user"
+      ],
+      "lessons": [
+        {
+          "id": "rerank-blend-candidates",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Blend candidates",
+          "prompt": "Склей candidates из popular/similar/model sources, убери дубли user-item и сохрани список источников.",
+          "starter": "def blend_candidates(frames):",
+          "answer": "def blend_candidates(frames):\n    df = pd.concat(frames, ignore_index=True)\n    src = df.groupby(['user_id', 'item_id'])['source'].agg(lambda x: '|'.join(sorted(set(x)))).rename('sources')\n    df = df.drop_duplicates(['user_id', 'item_id']).drop(columns=['source']).reset_index(drop=True)\n    return df.join(src, on=['user_id', 'item_id'])",
+          "testsText": "Проверяется dedupe и сохранение источников candidate pair.",
+          "hint": "Source useful: pair, пришедшая из двух генераторов, часто сильнее.",
+          "explain": "Candidate blending повышает recall, а source feature помогает reranker понять качество кандидата.",
+          "terms": ["reranker", "candidate_generation"]
+        },
+        {
+          "id": "rerank-topk-per-user",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "TopK per user",
+          "prompt": "Отсортируй candidates по score и оставь top-k item для каждого user.",
+          "starter": "def topk_per_user(candidates, k=10):",
+          "answer": "def topk_per_user(candidates, k=10):\n    df = candidates.sort_values(['user_id', 'score'], ascending=[True, False])\n    df = df.groupby('user_id').head(k)\n    return df[['user_id', 'item_id', 'score']].reset_index(drop=True)",
+          "testsText": "Проверяется сортировка внутри user и не более k строк на user.",
+          "hint": "Глобальный top-k по score сломает пользователей с меньшими score scale.",
+          "explain": "Submission в recsys почти всегда формируется per user.",
+          "terms": ["ranking"]
+        },
+        {
+          "id": "rerank-time-decay-feature",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Time decay feature",
+          "prompt": "Для interactions посчитай recency feature: `exp(-(cutoff_ts - last_ts) / tau)` для user-item пары.",
+          "starter": "def add_recency(candidates, interactions, cutoff_ts, tau):",
+          "answer": "def add_recency(candidates, interactions, cutoff_ts, tau):\n    last_ts = interactions.groupby(['user_id', 'item_id'])['ts'].max().rename('last_ts')\n    out = candidates.join(last_ts, on=['user_id', 'item_id'])\n    age = cutoff_ts - out['last_ts']\n    out['ui_recency'] = np.exp(-age / tau).fillna(0.0)\n    return out.drop(columns=['last_ts'])",
+          "testsText": "Проверяется unseen pair и decay по последнему timestamp.",
+          "hint": "Чем свежее взаимодействие, тем ближе feature к 1.",
+          "explain": "Recency часто сильнее сырого count, особенно в задачах с быстрым изменением интересов.",
+          "terms": ["feature_engineering"]
+        },
+        {
+          "id": "rerank-negative-sampling-leak",
+          "kind": "bug",
+          "difficulty": 4,
+          "title": "Negative sampling leakage",
+          "prompt": "Какая строка может случайно добавить future positive как negative?",
+          "lines": [
+            "popular = train_events['item_id'].value_counts().index.tolist()",
+            "future_pos = valid_events.groupby('user_id')['item_id'].apply(set).to_dict()",
+            "seen = train_events.groupby('user_id')['item_id'].apply(set).to_dict()",
+            "neg = [i for i in popular if i not in seen.get(user, set())][:20]",
+            "rows += [{'user_id': user, 'item_id': i, 'label': 0} for i in neg]"
+          ],
+          "answer": 3,
+          "hint": "Для train labels нельзя помечать valid positive item как negative.",
+          "explain": "Если future positive попадает в negatives, reranker получает противоречивую разметку и offline metric врет.",
+          "terms": ["leakage", "negative_sampling"]
+        },
+        {
+          "id": "rerank-catboost-pool",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "CatBoost Pool",
+          "prompt": "Создай CatBoost Pool для reranker с categorical columns user_id/item_id/category.",
+          "starter": "from catboost import Pool",
+          "answer": "from catboost import Pool\n\ncat_cols = ['user_id', 'item_id', 'category']\ntrain_pool = Pool(X_train, y_train, cat_features=cat_cols)\nvalid_pool = Pool(X_valid, y_valid, cat_features=cat_cols)",
+          "testsText": "Проверяется Pool и cat_features.",
+          "hint": "CatBoost должен знать, что ids являются категориями, а не ordered numbers.",
+          "explain": "Для reranker CatBoost baseline часто очень силен именно из-за категориальных признаков.",
+          "terms": ["catboost"]
+        },
+        {
+          "id": "rerank-idea-review-solution",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "Review reranker solution",
+          "prompt": "Тебе дали чужое решение reranker. Напиши, что проверишь первым делом в код-ревью.",
+          "context": "Решение строит candidates, features, обучает CatBoost и делает submission.",
+          "rubric": [
+            {"label": "candidate recall", "keywords": ["recall", "candidate", "кандидат"]},
+            {"label": "leakage", "keywords": ["leak", "future", "cutoff", "будущ"]},
+            {"label": "validation", "keywords": ["validation", "fold", "valid", "split"]},
+            {"label": "dedupe/rank", "keywords": ["duplicate", "dedupe", "rank", "sort"]},
+            {"label": "submission", "keywords": ["submission", "format", "top"] }
+          ],
+          "minRubric": 4,
+          "minWords": 45,
+          "hint": "Review должен ловить не стиль, а места, где score становится фейковым.",
+          "explain": "Peer review решений MLingo потом можно строить вокруг таких checklist-ответов.",
+          "reference": "Хороший review: проверить Recall@K candidate generator, time cutoff у фичей, отсутствие future positives в negatives, group/time validation, duplicate user-item pairs, сортировку top-k per user и формат submission.",
+          "terms": ["validation", "leakage"]
+        }
+      ]
+    },
+    {
+      "id": "dl-contest-drills",
+      "title": "DL: implementation drills",
+      "track": "Transformers / Diffusion / Training",
+      "tag": "torch",
+      "icon": "DL",
+      "color": "#dec27d",
+      "copy": "Мелкие блоки, на которых часто ломается ручной torch: scheduler, masks, sampling, clipping и label smoothing.",
+      "rules": [
+        "Лоссы получают logits, а не argmax",
+        "Sampling/inference идет в eval и no_grad",
+        "Stability tricks применяются после backward, но до optimizer.step"
+      ],
+      "lessons": [
+        {
+          "id": "dl-grad-clip-order",
+          "kind": "order",
+          "difficulty": 2,
+          "title": "Grad clip order",
+          "prompt": "Собери порядок шага обучения с gradient clipping.",
+          "blocks": [
+            "optimizer.zero_grad()",
+            "logits = model(x)",
+            "loss = criterion(logits, y)",
+            "loss.backward()",
+            "torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)",
+            "optimizer.step()"
+          ],
+          "answer": [
+            "optimizer.zero_grad()",
+            "logits = model(x)",
+            "loss = criterion(logits, y)",
+            "loss.backward()",
+            "torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)",
+            "optimizer.step()"
+          ],
+          "hint": "Clipping работает с уже посчитанными gradients.",
+          "explain": "Градиенты появляются после backward, а clip нужно сделать до изменения весов.",
+          "terms": ["gradients", "training_loop"]
+        },
+        {
+          "id": "dl-label-smoothing-ce",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Label smoothing CE",
+          "prompt": "Напиши label smoothing cross entropy для logits `[B,C]` и target `[B]`.",
+          "starter": "def smooth_ce(logits, target, eps=0.1):",
+          "answer": "def smooth_ce(logits, target, eps=0.1):\n    log_prob = torch.log_softmax(logits, dim=1)\n    nll = -log_prob.gather(1, target[:, None]).squeeze(1)\n    smooth = -log_prob.mean(dim=1)\n    return ((1 - eps) * nll + eps * smooth).mean()",
+          "testsText": "Проверяется log_softmax, gather target class и mean.",
+          "hint": "Сглаженная цель смешивает true class и равномерное распределение.",
+          "explain": "Label smoothing может улучшать generalization и калибровку, но на маленьких данных проверяется только validation.",
+          "terms": ["cross_entropy", "logits"]
+        },
+        {
+          "id": "dl-cosine-lr-step",
+          "kind": "fill",
+          "difficulty": 2,
+          "title": "Scheduler step",
+          "prompt": "Где обычно поставить `scheduler.step()` для epoch-level scheduler?",
+          "code": "for epoch in range(num_epochs):\n    train_one_epoch(model, train_loader)\n    val_score = validate(model, valid_loader)\n    ____.step()",
+          "blanks": ["scheduler"],
+          "hint": "Epoch scheduler обновляется после эпохи, а не внутри каждого batch.",
+          "explain": "Для batch-level schedulers место другое, но CosineAnnealingLR часто шагает раз в эпоху.",
+          "terms": ["scheduler"]
+        },
+        {
+          "id": "dl-diffusion-ddim-step-shape",
+          "kind": "choice",
+          "difficulty": 3,
+          "title": "Diffusion output shape",
+          "prompt": "Модель diffusion предсказывает noise для `x_t` shape `[B,C,H,W]`. Какая shape должна быть у prediction?",
+          "options": ["[B,C,H,W]", "[B,1]", "[B,T,C]", "[C,H,W]"],
+          "answer": "[B,C,H,W]",
+          "hint": "Target noise имеет ровно такую же форму, как noisy image.",
+          "explain": "Noise prediction loss сравнивает `pred_noise` и `noise` по каждому пикселю/каналу.",
+          "terms": ["diffusion", "shape"]
+        },
+        {
+          "id": "dl-transformer-pad-loss",
+          "kind": "fix",
+          "difficulty": 4,
+          "title": "Ignore padding loss",
+          "prompt": "Исправь language-model loss, чтобы padding token id 0 не влиял на CrossEntropy.",
+          "code": "loss = torch.nn.functional.cross_entropy(logits.view(-1, vocab), targets.view(-1))",
+          "answer": "loss = torch.nn.functional.cross_entropy(\n    logits.view(-1, vocab),\n    targets.view(-1),\n    ignore_index=0,\n)",
+          "hint": "Padding не является настоящим next-token target.",
+          "explain": "`ignore_index` не дает модели оптимизировать loss на искусственных pad positions.",
+          "strictLines": true,
+          "terms": ["cross_entropy", "padding"]
+        },
+        {
+          "id": "dl-small-data-training-idea",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "Small-data DL plan",
+          "prompt": "Есть 50 размеченных изображений и нельзя скачивать pretrained weights. Напиши DL-план, который не переобучится мгновенно.",
+          "context": "Нужно получить рабочий CV baseline за 6 часов.",
+          "rubric": [
+            {"label": "simple baseline", "keywords": ["baseline", "simple", "маленьк", "cnn"]},
+            {"label": "augmentation", "keywords": ["augment", "flip", "crop", "resize"]},
+            {"label": "validation", "keywords": ["validation", "fold", "valid"]},
+            {"label": "regularization", "keywords": ["dropout", "weight decay", "early stopping"]},
+            {"label": "compare non-DL", "keywords": ["catboost", "features", "non-dl", "baseline"]}
+          ],
+          "minRubric": 4,
+          "minWords": 50,
+          "hint": "На 50 картинках большая модель с нуля почти наверняка memorizes.",
+          "explain": "Contest intuition: маленькая модель, сильная validation discipline и быстрые baselines важнее красивой архитектуры.",
+          "reference": "Хороший план: начать с простого baseline, маленькой CNN/U-Net, аугментаций, weight decay/dropout/early stopping, честной валидации, визуализации ошибок и сравнения с non-DL features+CatBoost, если задача позволяет.",
+          "terms": ["validation", "overfitting"]
+        }
+      ]
+    }
+  ]
+}

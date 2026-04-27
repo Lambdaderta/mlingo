@@ -103,11 +103,20 @@ textarea:focus-visible {
 .avatar {
   background: linear-gradient(135deg, var(--amber), var(--blue-strong));
   color: #12141a;
+  overflow: hidden;
 }
 
 .brand-mark {
   width: 2.65rem;
   height: 2.65rem;
+}
+
+.brand-mark img,
+.avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .brand strong,

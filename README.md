@@ -1,45 +1,49 @@
 # MLingo
 
-MLingo — темный offline-first тренажер для ручного ML-кода. Проект помогает готовиться к олимпиадам и коротким ML-контестам: задачи маленькие, но проверяют реальные навыки — PyTorch loops, CV, segmentation, validation, leakage, metrics, NumPy/Pandas, boosting, recsys и reranking.
+![MLingo](assets/brand/mlingo-readme-card.png)
 
-Код открыт для чтения, обучения и контрибьютов. Основной публичный инстанс предполагается один: сайт владельца проекта с аккаунтами, прогрессом, стриками и таблицей лидеров.
+MLingo — тренажер для практики ML-кода руками. Проект собирает короткие упражнения по NumPy, Pandas, PyTorch, computer vision, segmentation, validation, boosting, recommender systems, transformers и diffusion basics.
+
+Цель проекта — прокачивать не только знание идей, но и привычку быстро писать рабочий код в contest-style условиях: без бесконечного контекста, без готовых шаблонов и без слепого копирования.
 
 ## Возможности
 
-- PWA-интерфейс для desktop и mobile.
-- Уроки доступны без регистрации; GitHub-вход пока опционален и нужен для будущей синхронизации.
-- Локальное устройство хранит кэш прогресса, а backend позже сможет синхронизировать прогресс, стрики и leaderboard.
-- GitHub sync: прогресс и решения можно сохранять в свой `mlingo-solutions`.
-- Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, интеграций, синхронизации и leaderboard.
-- JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
-- Android APK через Capacitor.
-- macOS `.app` через нативный WKWebView wrapper.
-- GitHub Actions для проверок и публикации APK в GitHub Releases.
-- Типы упражнений: выбор ответа, порядок строк, пропуски, поиск бага, исправление кода, ручное написание кода и свободный разбор идеи.
+- Короткие интерактивные задания: выбор ответа, порядок строк, пропуски, поиск бага, исправление кода, ручное написание кода и свободный разбор идеи.
+- Дорожные карты по темам, профиль, опыт, стрики и локальный прогресс.
+- Offline-first режим: приложение продолжает работать с уже загруженными заданиями.
+- JSON-паки заданий: банк задач можно расширять без пересборки приложения.
+- Импорт и синхронизация паков из GitHub raw URL.
+- Опциональная интеграция с GitHub для сохранения прогресса и решений в отдельный репозиторий.
+- Опциональный backend на Python + PostgreSQL для аккаунтов, синхронизации, leaderboard и будущих review-механик.
+- PWA, Android shell через Capacitor и macOS shell на WKWebView.
 
 ## Быстрый запуск
 
-Рекомендуемый локальный запуск с backend и PostgreSQL:
+Статический запуск без backend:
+
+```bash
+python3 -m http.server 4173
+```
+
+После запуска откройте:
+
+```text
+http://127.0.0.1:4173/
+```
+
+Запуск с backend и PostgreSQL:
 
 ```bash
 docker compose up --build
 ```
 
-После запуска приложение доступно по адресу:
+Приложение будет доступно на:
 
 ```text
 http://localhost:4180/
 ```
 
-Docker Compose поднимает:
-
-- `app` — Python backend и статический frontend;
-- `db` — PostgreSQL 16;
-- `postgres_data` — локальное постоянное хранилище базы.
-
-## Запуск без Docker
-
-Нужны PostgreSQL и Python-зависимости:
+## Запуск Backend Без Docker
 
 ```bash
 python3 -m venv .venv
@@ -49,140 +53,87 @@ cp .env.example .env
 python3 server.py --port 4180
 ```
 
-Переменные окружения:
+Основные переменные окружения:
 
 - `DATABASE_URL` — строка подключения к PostgreSQL.
-- `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.app`.
-- `PORT` — порт приложения, по умолчанию `4180`.
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — данные GitHub OAuth App для опционального GitHub-входа.
-- `GITHUB_OAUTH_REDIRECT_URI` — callback URL, например `https://mlingo.app/api/auth/github/callback`.
-- `GITHUB_OAUTH_SCOPES` — по умолчанию `read:user user:email public_repo`, чтобы repo mode мог пушить публичные решения.
-- `GITHUB_SOLUTIONS_REPO_NAME` — имя репозитория решений, по умолчанию `mlingo-solutions`.
+- `MLINGO_ALLOWED_ORIGIN` — origin frontend-приложения.
+- `PORT` — порт backend, по умолчанию `4180`.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — GitHub OAuth App.
+- `GITHUB_OAUTH_REDIRECT_URI` — callback URL GitHub OAuth.
+- `GITHUB_SOLUTIONS_REPO_NAME` — репозиторий для сохранения решений, по умолчанию `mlingo-solutions`.
 
-## API
+## Пакеты Заданий
 
-- `GET /api/health` — проверка состояния backend и базы.
-- `GET /api/config` — публичная runtime-конфигурация frontend.
-- `POST /api/register` — отключено; MLingo использует только GitHub OAuth.
-- `POST /api/login` — отключено; MLingo использует только GitHub OAuth.
-- `GET /api/auth/github/start` — старт GitHub OAuth; при первом входе GitHub-профиль автоматически создает аккаунт MLingo.
-- `GET /api/auth/github/callback` — callback от GitHub OAuth.
-- `POST /api/auth/github/disconnect` — отключение GitHub-связки, если у аккаунта появится другой способ входа.
-- `POST /api/github/repo/enable` — создать или подключить solutions repo.
-- `POST /api/github/repo/disable` — поставить GitHub sync решений на паузу.
-- `POST /api/github/solutions` — сохранить решение в GitHub и очередь review.
-- `POST /api/logout` — выход.
-- `GET /api/me` — текущий пользователь.
-- `GET /api/progress` — загрузка прогресса.
-- `PUT /api/progress` — сохранение прогресса.
-- `POST /api/event` — событие прохождения урока.
-- `GET /api/leaderboard` — таблица лидеров.
-- `GET /api/review/solutions` — очередь решений для будущего peer review.
+Bundled-паки лежат в [lesson-packs](lesson-packs):
 
-В PostgreSQL хранятся пользователи, GitHub-связки, сессии, JSON прогресса, XP, стрики, ошибки, события уроков, очередь review и leaderboard. Вход через GitHub используется как провайдер аккаунта; repo mode отдельно пушит решения в `mlingo-solutions`.
+- `cv-offline-pack.json` — CV пайплайны, segmentation, classification и идейные задачи.
+- `cv-fundamentals-pack.json` — image IO, masks, bbox, transforms, CNN/U-Net basics.
+- `recsys-rerank-pack.json` — candidate generation, reranking, ranking metrics и leakage-safe validation.
+- `dl-advanced-pack.json` — transformers, diffusion, RL basics и training tricks.
+- `contest-expansion-pack.json` — дополнительные contest-задачи по CV, recsys и deep learning.
 
-## Структура проекта
-
-- `index.html` — HTML-оболочка приложения.
-- `styles.css` — стили desktop/mobile интерфейса.
-- `app.js` — логика приложения, встроенные темы, прогресс и оффлайн-режим.
-- `lesson-packs/` — внешние JSON-паки заданий.
-- `server.py` — backend API, аккаунты, PostgreSQL и leaderboard.
-- `android/` — Capacitor Android shell.
-- `macos/` — минимальная macOS оболочка.
-- `manifest.webmanifest` — настройки PWA.
-- `service-worker.js` — кэш и оффлайн-доступ.
-- `Dockerfile`, `docker-compose.yml` — локальный и production-запуск.
-- `scripts/` — проверки, аудит уроков и подготовка Capacitor bundle.
-- `docs/` — документация по деплою, мобильным сборкам и пакам заданий.
-
-## Пак заданий
-
-Задания можно добавлять в `lesson-packs/*.json`, а индекс хранить в `lesson-packs/index.json`. Приложение умеет:
-
-- грузить bundled packs из репозитория;
-- импортировать JSON-файл локально;
-- синхронизировать packs из GitHub raw URL;
-- кэшировать загруженные packs в `localStorage`.
-
-Подробный формат описан в [docs/lesson-packs.md](docs/lesson-packs.md).
+Индекс паков хранится в [lesson-packs/index.json](lesson-packs/index.json). Формат описан в [docs/lesson-packs.md](docs/lesson-packs.md).
 
 ## GitHub Sync
 
-В профиле можно подключить fine-grained GitHub token или backend repo mode и сохранять прогресс/решения прямо в свой repo `mlingo-solutions`. Подробности: [docs/github-sync.md](docs/github-sync.md).
+MLingo умеет сохранять прогресс и решения в GitHub-репозиторий пользователя. Сейчас доступны два режима:
 
-## Android APK
+- serverless token mode — fine-grained token хранится локально в браузере;
+- backend repo mode — OAuth и запись решений проходят через backend.
 
-Локальная debug-сборка:
+Подробнее: [docs/github-sync.md](docs/github-sync.md).
+
+## Сборка Приложений
+
+Android debug APK:
 
 ```bash
 npm install
 npm run android:debug
 ```
 
-APK будет создан здесь:
+APK появится в:
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Установка на подключенный телефон:
-
-```bash
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Публичный APK для тестеров публикуется через GitHub Releases:
-
-```bash
-git tag -a v0.1.6 -m "MLingo v0.1.6"
-git push origin v0.1.6
-```
-
-Workflow `release-apps` соберет Android APK и macOS zip, затем прикрепит их к Release. Подробности: [docs/apps.md](docs/apps.md).
-
-## macOS App
-
-Локальная сборка:
+macOS app:
 
 ```bash
 npm install
 npm run macos:build
 ```
 
-Артефакты:
+Артефакты появятся в `dist/`.
 
-```text
-dist/MLingo.app
-dist/MLingo-v0.1.6-macOS.zip
-```
-
-## Деплой
-
-Для публичного запуска нужен web service и PostgreSQL. GitHub Pages подходит только для статического frontend, но MLingo использует аккаунты, сессии, синхронизацию прогресса и leaderboard.
-
-Рекомендуемый путь:
-
-1. Render, Railway, Fly.io или VPS.
-2. Managed PostgreSQL или собственный PostgreSQL.
-3. Один HTTPS-домен для frontend и API.
-4. Автоматический redeploy из ветки `main`.
-
-Подробная инструкция: [docs/deploy.md](docs/deploy.md).
+Подробности по APK, macOS build и GitHub Releases: [docs/apps.md](docs/apps.md).
 
 ## Проверки
 
 ```bash
 npm test
 npm run check
-npm run android:debug
-npm run android:test
 ```
 
-`npm test` проверяет синтаксис frontend, Python backend, схему JSON-паков, разрешенные библиотеки и базовые PWA-контракты.
+`npm test` проверяет синтаксис frontend, Python backend, JSON-паки, разрешенные библиотеки, PWA-контракты и базовую структуру приложения.
 
 `npm run check` дополнительно собирает Capacitor web bundle и запускает smoke-тест локального сайта.
 
+## Структура
+
+- [index.html](index.html) — HTML-оболочка приложения.
+- [styles.css](styles.css) — стили desktop/mobile интерфейса.
+- [app.js](app.js) — логика приложения, упражнения, прогресс и offline режим.
+- [lesson-packs](lesson-packs) — JSON-паки заданий.
+- [server.py](server.py) — backend API, GitHub OAuth, PostgreSQL, leaderboard и review queue.
+- [android](android) — Capacitor Android shell.
+- [macos](macos) — macOS WKWebView shell.
+- [docs](docs) — документация по пакам, приложениям, GitHub sync и деплою.
+- [assets/brand](assets/brand) — брендовые ассеты проекта.
+
 ## Контрибьютинг
 
-Перед добавлением задач прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) и список разрешенных библиотек в [docs/allowed-libraries.md](docs/allowed-libraries.md). Задания должны быть воспроизводимыми без интернета и без скачивания pretrained weights.
+Перед добавлением задач прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) и список разрешенных библиотек в [docs/allowed-libraries.md](docs/allowed-libraries.md).
+
+Задания должны быть воспроизводимыми без интернета и без скачивания pretrained weights. Если задача требует внешние данные, они должны быть явно описаны или поставляться вместе с контестом.

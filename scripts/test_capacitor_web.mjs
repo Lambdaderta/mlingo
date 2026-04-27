@@ -30,4 +30,9 @@ for (const file of fs.readdirSync(sourcePackDir).filter((item) => item.endsWith(
   assert.equal(read(built), read(source), `web/lesson-packs/${file} should match source pack`);
 }
 
+const sourceLogo = path.join(root, "assets/brand/mlingo-cat-logo-512.png");
+const builtLogo = path.join(webDir, "assets/brand/mlingo-cat-logo-512.png");
+assert.ok(fs.existsSync(builtLogo), "web/assets/brand/mlingo-cat-logo-512.png should exist");
+assert.deepEqual(fs.readFileSync(builtLogo), fs.readFileSync(sourceLogo), "web app logo should match source logo");
+
 console.log("Capacitor web bundle tests passed.");

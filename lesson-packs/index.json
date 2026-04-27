@@ -22,6 +22,11 @@
         "id": "dl-advanced-pack-v1",
         "title": "Deep Learning Advanced Expansion",
         "url": "./dl-advanced-pack.json"
+      },
+      {
+        "id": "contest-expansion-pack-v1",
+        "title": "Contest Expansion Pack",
+        "url": "./contest-expansion-pack.json"
       }
     ]
   }
