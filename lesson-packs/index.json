@@ -17,6 +17,11 @@
         "id": "recsys-rerank-pack-v1",
         "title": "RecSys and Rerankers Expansion",
         "url": "./recsys-rerank-pack.json"
+      },
+      {
+        "id": "dl-advanced-pack-v1",
+        "title": "Deep Learning Advanced Expansion",
+        "url": "./dl-advanced-pack.json"
       }
     ]
   }

@@ -12,6 +12,11 @@ function read(filePath) {
 const html = read("index.html");
 const app = read("app.js");
 const server = read("server.py");
+const syncStart = app.indexOf("async function syncLessonPacksFromGithub");
+const syncEnd = app.indexOf("async function fetchJson", syncStart);
+assert.notEqual(syncStart, -1, "GitHub lesson pack sync function should exist");
+assert.notEqual(syncEnd, -1, "fetchJson should follow GitHub lesson pack sync");
+const syncSource = app.slice(syncStart, syncEnd);
 
 assert.ok(app.includes("const AUTH_REQUIRED = false"), "practice should be available without registration for local/offline builds");
 assert.ok(app.includes("function enforceAuthGate"), "auth gate function should stay in place for easy hosted-mode re-enable");
@@ -20,6 +25,9 @@ assert.ok(html.includes("Вход через GitHub пока опционале�
 assert.ok(html.includes('id="githubLoginButton"'), "optional GitHub login button should remain available");
 assert.ok(app.includes('if (authResult === "github-error")'), "GitHub callback error branch should be handled");
 assert.ok(app.includes('showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз.")'), "GitHub callback errors should show a user-facing message");
+assert.ok(syncSource.includes("fetchJson(indexUrl)"), "GitHub lesson pack sync should fetch raw index.json directly");
+assert.ok(!syncSource.includes("apiRequest"), "GitHub lesson pack sync should not require backend auth");
+assert.ok(!syncSource.includes("currentUser"), "GitHub lesson pack sync should not require registration");
 assert.ok(!html.includes('id="authUsername"'), "local username registration should stay removed");
 assert.ok(!html.includes('id="authPassword"'), "password registration should stay removed");
 assert.ok(!app.includes("async function submitLocalAuth"), "client should not revive local password auth");

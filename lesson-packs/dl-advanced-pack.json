@@ -1,0 +1,459 @@
+{
+  "schemaVersion": 1,
+  "id": "dl-advanced-pack-v1",
+  "title": "Deep Learning Advanced Expansion",
+  "description": "Transformers, attention, diffusion models, RL basics and contest training patterns without pretrained weights.",
+  "topics": [
+    {
+      "id": "transformers-from-scratch",
+      "title": "Transformers: руками",
+      "track": "Attention / Sequence Models",
+      "tag": "torch",
+      "icon": "TF",
+      "color": "#8ea4c7",
+      "copy": "Формы Q/K/V, causal mask, multi-head attention, LayerNorm, language-model shift и padding.",
+      "rules": [
+        "Attention scores имеют shape [B,H,T,T]",
+        "Маска должна запрещать смотреть в будущее до softmax",
+        "CrossEntropyLoss для LM сравнивает logits до последнего токена с target после первого"
+      ],
+      "lessons": [
+        {
+          "id": "tr-attention-score-shape",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "Score shape",
+          "prompt": "Q, K, V имеют shape `[B,H,T,D]`. Какая shape у attention scores перед softmax?",
+          "options": ["[B,H,T,T]", "[B,T,H,D]", "[B,H,D,D]", "[T,T,D]"],
+          "answer": "[B,H,T,T]",
+          "hint": "Каждый query-position сравнивается с каждым key-position.",
+          "explain": "`q @ k.transpose(-2, -1)` сворачивает D и оставляет матрицу token-token для каждой batch/head пары.",
+          "terms": ["attention", "shape"]
+        },
+        {
+          "id": "tr-scaled-dot-product",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Scaled dot-product",
+          "prompt": "Напиши scaled dot-product attention без dropout: q/k/v shape `[B,H,T,D]`, mask опциональная bool `[T,T]`, где True = можно смотреть.",
+          "starter": "def attention(q, k, v, mask=None):",
+          "answer": "def attention(q, k, v, mask=None):\n    d = q.size(-1)\n    scores = q @ k.transpose(-2, -1) / (d ** 0.5)\n    if mask is not None:\n        scores = scores.masked_fill(~mask[None, None], -1e9)\n    weights = torch.softmax(scores, dim=-1)\n    return weights @ v",
+          "testsText": "Проверяется shape выхода и что masked positions не получают вес.",
+          "hint": "Softmax идет по последней оси: распределение по key positions.",
+          "explain": "Это ядро self-attention: similarity -> mask -> softmax -> weighted sum по values.",
+          "terms": ["attention", "softmax"]
+        },
+        {
+          "id": "tr-causal-mask-fill",
+          "kind": "fill",
+          "difficulty": 2,
+          "title": "Causal mask",
+          "prompt": "Заполни causal mask, где True означает разрешенную позицию.",
+          "code": "mask = torch.tril(torch.ones(T, T, dtype=torch.bool))\nscores = scores.masked_fill(____, -1e9)",
+          "blanks": ["~mask"],
+          "hint": "Запрещенные места должны получить очень маленький logit до softmax.",
+          "explain": "`torch.tril` оставляет текущий и прошлые токены. Инверсия `~mask` выбирает будущее.",
+          "terms": ["causal_mask"]
+        },
+        {
+          "id": "tr-mha-reshape",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "MHA reshape",
+          "prompt": "Напиши reshape после linear projection: `x` shape `[B,T,C]`, нужно получить `[B,H,T,D]`.",
+          "starter": "def split_heads(x, num_heads):",
+          "answer": "def split_heads(x, num_heads):\n    b, t, c = x.shape\n    d = c // num_heads\n    x = x.view(b, t, num_heads, d)\n    return x.permute(0, 2, 1, 3).contiguous()",
+          "testsText": "Проверяется, что head axis становится второй.",
+          "hint": "Сначала выдели ось heads внутри channels, потом permute.",
+          "explain": "Multi-head attention — это параллельные attention подпространства, поэтому C раскладывается в H*D.",
+          "terms": ["shape", "attention"]
+        },
+        {
+          "id": "tr-merge-heads",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Merge heads",
+          "prompt": "Собери обратно `[B,H,T,D] -> [B,T,H*D]` после attention.",
+          "starter": "def merge_heads(x):",
+          "answer": "def merge_heads(x):\n    b, h, t, d = x.shape\n    x = x.permute(0, 2, 1, 3).contiguous()\n    return x.view(b, t, h * d)",
+          "testsText": "Проверяется channels-last sequence output.",
+          "hint": "Сначала верни T перед H, потом склей H и D.",
+          "explain": "После attention головы конкатенируются и обычно проходят через output linear layer.",
+          "terms": ["shape"]
+        },
+        {
+          "id": "tr-key-padding-mask-bug",
+          "kind": "bug",
+          "difficulty": 3,
+          "title": "Padding mask axis",
+          "prompt": "Где ошибка в применении padding mask? `pad_mask` shape `[B,T]`, True = настоящий токен.",
+          "lines": [
+            "scores = q @ k.transpose(-2, -1) / math.sqrt(d)",
+            "mask = pad_mask[:, None, :, None]",
+            "scores = scores.masked_fill(~mask, -1e9)",
+            "weights = torch.softmax(scores, dim=-1)",
+            "out = weights @ v"
+          ],
+          "answer": 1,
+          "hint": "Padding mask должен запрещать key positions, а не query positions.",
+          "explain": "Для scores `[B,H,Tq,Tk]` key padding mask должен иметь shape `[B,1,1,Tk]`. Вариант `[B,1,T,1]` маскирует строки query.",
+          "terms": ["mask", "attention"]
+        },
+        {
+          "id": "tr-lm-shift-fix",
+          "kind": "fix",
+          "difficulty": 4,
+          "title": "LM shift",
+          "prompt": "Исправь loss для autoregressive language model: logits `[B,T,V]`, input_ids `[B,T]`.",
+          "code": "loss = F.cross_entropy(logits.reshape(-1, V), input_ids.reshape(-1))",
+          "answer": "shift_logits = logits[:, :-1, :].contiguous()\nshift_targets = input_ids[:, 1:].contiguous()\nloss = F.cross_entropy(shift_logits.view(-1, V), shift_targets.view(-1))",
+          "hint": "На позиции t модель предсказывает токен t+1.",
+          "explain": "Без shift модель учится копировать текущий токен, а не предсказывать следующий.",
+          "strictLines": true,
+          "terms": ["loss", "language_model"]
+        },
+        {
+          "id": "tr-pre-norm-order",
+          "kind": "order",
+          "difficulty": 3,
+          "title": "Pre-norm block",
+          "prompt": "Собери pre-norm Transformer block.",
+          "blocks": [
+            "x = x + self.attn(self.ln1(x), mask=mask)",
+            "x = x + self.mlp(self.ln2(x))",
+            "return x",
+            "def forward(self, x, mask=None):"
+          ],
+          "answer": [
+            "def forward(self, x, mask=None):",
+            "x = x + self.attn(self.ln1(x), mask=mask)",
+            "x = x + self.mlp(self.ln2(x))",
+            "return x"
+          ],
+          "hint": "Pre-norm: LayerNorm до sublayer, residual после него.",
+          "explain": "Pre-norm часто стабильнее в глубоких transformer blocks, потому градиенту проще идти через residual path.",
+          "terms": ["layernorm", "residual"]
+        },
+        {
+          "id": "tr-sinusoidal-pos",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Sinusoidal positions",
+          "prompt": "Напиши sinusoidal positional encoding `[max_len, dim]`.",
+          "starter": "def sinusoidal_pos(max_len, dim):",
+          "answer": "def sinusoidal_pos(max_len, dim):\n    pos = torch.arange(max_len).float()[:, None]\n    i = torch.arange(0, dim, 2).float()[None]\n    div = torch.exp(-math.log(10000.0) * i / dim)\n    pe = torch.zeros(max_len, dim)\n    pe[:, 0::2] = torch.sin(pos * div)\n    pe[:, 1::2] = torch.cos(pos * div)\n    return pe",
+          "testsText": "Проверяется shape и разные sin/cos каналы.",
+          "hint": "Четные каналы sin, нечетные cos.",
+          "explain": "Позиционное кодирование добавляет order information, которого нет в чистом attention.",
+          "terms": ["positional_encoding"]
+        },
+        {
+          "id": "tr-attention-idea-small-data",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "Transformer на маленьких данных",
+          "prompt": "Опиши, как бы ты быстро проверил transformer-like модель на маленьком tabular/sequence датасете за 6 часов.",
+          "context": "Дано мало данных, много категориальных признаков и короткие последовательности. Pretrained weights нельзя. Нужно быстро понять, есть ли смысл в attention вместо CatBoost/LightGBM.",
+          "rubric": [
+            {"label": "baseline first", "keywords": ["baseline", "catboost", "lightgbm", "бейзлайн"]},
+            {"label": "validation", "keywords": ["validation", "fold", "валидац"]},
+            {"label": "small model", "keywords": ["small", "мал", "embedding", "dropout"]},
+            {"label": "ablation", "keywords": ["ablation", "сравн", "эксперимент"]},
+            {"label": "time budget", "keywords": ["time", "6", "быстр", "лимит"]}
+          ],
+          "minRubric": 3,
+          "minWords": 45,
+          "reference": "Хороший план: сначала CatBoost/LightGBM baseline и честная валидация, потом маленький transformer с embeddings/dropout и ограниченным числом слоев, быстрое сравнение на subset/fold, ablation attention vs MLP, остановка если прироста нет.",
+          "hint": "Не пытайся доказать, что transformer всегда лучше. Докажи, что он успевает дать прирост на твоей валидации.",
+          "explain": "В олимпиадном ML архитектура важна меньше, чем быстрый baseline, валидация и контроль времени."
+        }
+      ]
+    },
+    {
+      "id": "diffusion-core",
+      "title": "Diffusion: база",
+      "track": "Generative Models",
+      "tag": "torch",
+      "icon": "DF",
+      "color": "#c7a76a",
+      "copy": "Forward noising, alpha_bar, noise prediction loss, timestep embeddings, CFG и sampling loop.",
+      "rules": [
+        "q_sample добавляет шум по закрытой формуле, без цикла по t",
+        "DDPM обычно учит модель предсказывать noise epsilon",
+        "Sampling запускается в no_grad и идет от T-1 к 0"
+      ],
+      "lessons": [
+        {
+          "id": "df-linear-beta-schedule",
+          "kind": "write",
+          "difficulty": 2,
+          "title": "Linear beta",
+          "prompt": "Напиши linear beta schedule длины `T` от `beta_start` до `beta_end`.",
+          "starter": "def linear_beta_schedule(T, beta_start=1e-4, beta_end=0.02):",
+          "answer": "def linear_beta_schedule(T, beta_start=1e-4, beta_end=0.02):\n    return torch.linspace(beta_start, beta_end, T)",
+          "testsText": "Проверяется длина и первый/последний beta.",
+          "hint": "`torch.linspace` уже делает равномерную сетку.",
+          "explain": "Beta задает силу шума на каждом diffusion step.",
+          "terms": ["diffusion"]
+        },
+        {
+          "id": "df-alpha-bar-fill",
+          "kind": "fill",
+          "difficulty": 2,
+          "title": "alpha_bar",
+          "prompt": "Заполни вычисление cumulative product для alpha_bar.",
+          "code": "betas = linear_beta_schedule(T)\nalphas = 1.0 - betas\nalpha_bar = torch.____(alphas, dim=0)",
+          "blanks": ["cumprod"],
+          "hint": "Нужен продукт alpha_1 * ... * alpha_t.",
+          "explain": "`alpha_bar[t]` говорит, какая доля исходного сигнала остается после t шагов noising.",
+          "terms": ["diffusion"]
+        },
+        {
+          "id": "df-extract-coef",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Extract coefficients",
+          "prompt": "Напиши helper `extract(a, t, x_shape)`: взять коэффициенты `a[t]` для batch и reshape к `[B,1,1,1]`.",
+          "starter": "def extract(a, t, x_shape):",
+          "answer": "def extract(a, t, x_shape):\n    b = t.shape[0]\n    out = a.gather(0, t)\n    return out.reshape(b, *((1,) * (len(x_shape) - 1)))",
+          "testsText": "Проверяется broadcast на image tensor `[B,C,H,W]`.",
+          "hint": "Коэффициент один на объект в batch, но должен broadcast по C/H/W.",
+          "explain": "Так один и тот же код q_sample работает для разных spatial shapes.",
+          "terms": ["broadcast"]
+        },
+        {
+          "id": "df-q-sample",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "q_sample",
+          "prompt": "Напиши forward noising: `x_t = sqrt(alpha_bar_t)*x0 + sqrt(1-alpha_bar_t)*noise`.",
+          "starter": "def q_sample(x0, t, alpha_bar, noise=None):",
+          "answer": "def q_sample(x0, t, alpha_bar, noise=None):\n    if noise is None:\n        noise = torch.randn_like(x0)\n    a = extract(alpha_bar, t, x0.shape)\n    return a.sqrt() * x0 + (1 - a).sqrt() * noise",
+          "testsText": "Проверяется shape и возможность передать фиксированный noise.",
+          "hint": "Не делай цикл по t: используй gather/extract.",
+          "explain": "Закрытая формула q_sample позволяет обучать любой timestep напрямую.",
+          "terms": ["diffusion", "noise"]
+        },
+        {
+          "id": "df-noise-loss-choice",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "Что предсказывает DDPM?",
+          "prompt": "В базовом DDPM loss чаще всего обучает сеть предсказывать...",
+          "options": ["добавленный noise epsilon", "готовую class label", "только alpha_bar", "learning rate"],
+          "answer": "добавленный noise epsilon",
+          "hint": "Модель получает noisy image и timestep.",
+          "explain": "Noise prediction превращает generative training в supervised regression по известному шуму.",
+          "terms": ["diffusion", "loss"]
+        },
+        {
+          "id": "df-predict-noise-loss",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Noise prediction loss",
+          "prompt": "Напиши один training step loss: sample t, noise, x_t, pred_noise, MSE.",
+          "starter": "def diffusion_loss(model, x0, alpha_bar):",
+          "answer": "def diffusion_loss(model, x0, alpha_bar):\n    b = x0.size(0)\n    t = torch.randint(0, alpha_bar.size(0), (b,), device=x0.device)\n    noise = torch.randn_like(x0)\n    xt = q_sample(x0, t, alpha_bar, noise)\n    pred = model(xt, t)\n    return F.mse_loss(pred, noise)",
+          "testsText": "Проверяется случайный timestep на каждый объект и MSE с true noise.",
+          "hint": "Target — тот noise, который ты сам добавил.",
+          "explain": "Diffusion training получает много разных supervised задач из одних и тех же изображений.",
+          "terms": ["loss", "diffusion"]
+        },
+        {
+          "id": "df-timestep-embedding",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Timestep embedding",
+          "prompt": "Напиши sinusoidal timestep embedding `[B,dim]` для integer timesteps.",
+          "starter": "def timestep_embedding(t, dim):",
+          "answer": "def timestep_embedding(t, dim):\n    half = dim // 2\n    freqs = torch.exp(-math.log(10000.0) * torch.arange(half, device=t.device).float() / half)\n    args = t.float()[:, None] * freqs[None]\n    emb = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)\n    if dim % 2 == 1:\n        emb = F.pad(emb, (0, 1))\n    return emb",
+          "testsText": "Проверяется batch shape и odd dim.",
+          "hint": "Очень похоже на positional encoding, только позиция — это timestep.",
+          "explain": "UNet должен знать уровень шума; timestep embedding передает это в сеть.",
+          "terms": ["embedding", "diffusion"]
+        },
+        {
+          "id": "df-sampling-no-grad-order",
+          "kind": "order",
+          "difficulty": 3,
+          "title": "Sampling loop",
+          "prompt": "Собери правильный skeleton sampling loop для diffusion model.",
+          "blocks": [
+            "with torch.no_grad():",
+            "x = torch.randn(shape, device=device)",
+            "for step in reversed(range(T)):",
+            "t = torch.full((shape[0],), step, device=device, dtype=torch.long)",
+            "x = p_sample(model, x, t, step)",
+            "return x"
+          ],
+          "answer": [
+            "x = torch.randn(shape, device=device)",
+            "with torch.no_grad():",
+            "for step in reversed(range(T)):",
+            "t = torch.full((shape[0],), step, device=device, dtype=torch.long)",
+            "x = p_sample(model, x, t, step)",
+            "return x"
+          ],
+          "hint": "Sampling идет от чистого шума к изображению, градиенты не нужны.",
+          "explain": "`no_grad` экономит память, а reversed loop соответствует reverse diffusion process.",
+          "terms": ["sampling", "diffusion"]
+        },
+        {
+          "id": "df-cfg-fill",
+          "kind": "fill",
+          "difficulty": 3,
+          "title": "Classifier-free guidance",
+          "prompt": "Заполни CFG формулу для noise prediction.",
+          "code": "eps_uncond = model(x, t, cond=None)\neps_cond = model(x, t, cond=label)\neps = eps_uncond + scale * (____ - eps_uncond)",
+          "blanks": ["eps_cond"],
+          "hint": "Guidance двигает prediction от unconditional к conditional.",
+          "explain": "CFG усиливает условие без отдельного classifier: `scale=0` дает unconditional, большие scale сильнее следуют условию.",
+          "terms": ["diffusion"]
+        },
+        {
+          "id": "df-ddpm-idea-small-data",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "Diffusion в олимпиаде",
+          "prompt": "Опиши, когда diffusion model стоит пробовать в 6-часовом contest, а когда лучше не трогать.",
+          "context": "Есть задача с изображениями, 16 GB RAM, GPU в Jupyter, pretrained weights нельзя, submissions ограничены. Нужно решить, стоит ли писать diffusion pipeline.",
+          "rubric": [
+            {"label": "baseline", "keywords": ["baseline", "бейзлайн", "classification", "segmentation"]},
+            {"label": "compute", "keywords": ["gpu", "time", "6", "ресурс", "compute"]},
+            {"label": "data size", "keywords": ["data", "данн", "мал", "много"]},
+            {"label": "augmentation use", "keywords": ["augment", "augmentation", "аугментац", "synthetic"]},
+            {"label": "risk control", "keywords": ["risk", "риск", "validation", "валидац"]}
+          ],
+          "minRubric": 3,
+          "minWords": 45,
+          "reference": "Хороший ответ: diffusion с нуля почти всегда рискованно за 6 часов и без pretrained weights; разумнее делать сильный supervised baseline. Пробовать можно как генератор synthetic augmentation только если есть много данных/простая domain shape/уже есть рабочий baseline и честная validation.",
+          "hint": "Вспомни стоимость sampling/training и сравни с быстрым supervised приростом.",
+          "explain": "В олимпиаде важен expected value идеи: diffusion красивый, но часто слишком дорогой для короткого contest."
+        }
+      ]
+    },
+    {
+      "id": "rl-and-training-tricks",
+      "title": "RL и training tricks",
+      "track": "RL / Optimization / Validation",
+      "tag": "torch",
+      "icon": "RL",
+      "color": "#d7b56d",
+      "copy": "Минимальная база RL и общие паттерны обучения: targets без градиента, policy loss, clipping, EMA и reproducibility.",
+      "rules": [
+        "Targets в value/RL часто считаются под no_grad",
+        "Gradient clipping ставится после backward и до optimizer.step",
+        "EMA обновляется после optimizer.step"
+      ],
+      "lessons": [
+        {
+          "id": "rl-dqn-target-nograd",
+          "kind": "fix",
+          "difficulty": 4,
+          "title": "DQN target no_grad",
+          "prompt": "Исправь DQN target: target network не должен получать градиенты.",
+          "code": "next_q = target_net(next_obs).max(dim=1).values\ntarget = reward + gamma * (1 - done) * next_q\nloss = F.mse_loss(q_sa, target)",
+          "answer": "with torch.no_grad():\n    next_q = target_net(next_obs).max(dim=1).values\n    target = reward + gamma * (1 - done) * next_q\nloss = F.mse_loss(q_sa, target)",
+          "hint": "Target — это численная цель, а не ветка графа для backprop.",
+          "explain": "Если target_net получает градиенты, target начинает двигаться вместе с prediction и обучение становится нестабильным.",
+          "strictLines": true,
+          "terms": ["rl", "no_grad"]
+        },
+        {
+          "id": "rl-policy-gradient-loss",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Policy gradient loss",
+          "prompt": "Напиши REINFORCE loss по `log_prob` выбранных действий и advantage.",
+          "starter": "def policy_loss(log_prob, advantage):",
+          "answer": "def policy_loss(log_prob, advantage):\n    return -(log_prob * advantage.detach()).mean()",
+          "testsText": "Проверяется знак loss и detach advantage.",
+          "hint": "Мы минимизируем loss, поэтому reward/advantage идет с минусом.",
+          "explain": "Detach нужен, чтобы policy update не тащил градиенты через оценку advantage.",
+          "terms": ["rl", "loss"]
+        },
+        {
+          "id": "train-grad-clip-order",
+          "kind": "order",
+          "difficulty": 2,
+          "title": "Gradient clipping",
+          "prompt": "Собери правильный порядок шага обучения с gradient clipping.",
+          "blocks": [
+            "optimizer.zero_grad()",
+            "loss = criterion(model(x), y)",
+            "loss.backward()",
+            "torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)",
+            "optimizer.step()"
+          ],
+          "answer": [
+            "optimizer.zero_grad()",
+            "loss = criterion(model(x), y)",
+            "loss.backward()",
+            "torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)",
+            "optimizer.step()"
+          ],
+          "hint": "Clipping работает с уже посчитанными gradients.",
+          "explain": "Если клипнуть до backward, градиентов еще нет. Если после step, параметры уже обновлены.",
+          "terms": ["optimizer", "gradients"]
+        },
+        {
+          "id": "train-ema-update",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "EMA update",
+          "prompt": "Напиши обновление EMA-параметров после optimizer.step.",
+          "starter": "def update_ema(ema_model, model, decay=0.999):",
+          "answer": "def update_ema(ema_model, model, decay=0.999):\n    with torch.no_grad():\n        for p_ema, p in zip(ema_model.parameters(), model.parameters()):\n            p_ema.mul_(decay).add_(p, alpha=1 - decay)",
+          "testsText": "Проверяется in-place update и отсутствие gradients.",
+          "hint": "EMA = decay * old_ema + (1-decay) * current.",
+          "explain": "EMA часто стабилизирует validation/sampling, особенно в generative models.",
+          "terms": ["ema"]
+        },
+        {
+          "id": "train-seed-worker-choice",
+          "kind": "choice",
+          "difficulty": 2,
+          "title": "Reproducibility",
+          "prompt": "Что сильнее всего ломает воспроизводимость DataLoader augmentations?",
+          "options": ["не зафиксировать seed для workers", "слишком маленький batch_size", "использовать tqdm", "назвать модель net"],
+          "answer": "не зафиксировать seed для workers",
+          "hint": "Augmentations часто вызываются внутри worker processes.",
+          "explain": "Для честных ablation полезно контролировать random seed, worker seed и split.",
+          "terms": ["validation"]
+        },
+        {
+          "id": "train-accumulation-fill",
+          "kind": "fill",
+          "difficulty": 3,
+          "title": "Gradient accumulation",
+          "prompt": "Заполни scaling loss при accumulation на `accum_steps` микробатчей.",
+          "code": "loss = criterion(model(x), y)\nloss = loss / ____\nloss.backward()",
+          "blanks": ["accum_steps"],
+          "hint": "Без scaling итоговый gradient будет примерно в accum_steps раз больше.",
+          "explain": "Gradient accumulation имитирует больший batch, но нужно нормировать loss.",
+          "terms": ["gradients", "batching"]
+        },
+        {
+          "id": "train-speed-idea",
+          "kind": "idea",
+          "difficulty": 3,
+          "title": "Ускорение экспериментов",
+          "prompt": "Опиши план быстрых экспериментов, если одна эпоха занимает 20 минут, а на задачу 6 часов.",
+          "context": "Ты хочешь проверить архитектуру, augmentations и LR. Данных много, submissions мало, pretrained weights нельзя.",
+          "rubric": [
+            {"label": "subset", "keywords": ["subset", "подвыбор", "мал"]},
+            {"label": "validation", "keywords": ["validation", "валидац", "fold"]},
+            {"label": "short runs", "keywords": ["epoch", "эпох", "short", "быстр"]},
+            {"label": "rank ideas", "keywords": ["prior", "приоритет", "ранж"]},
+            {"label": "submit control", "keywords": ["submit", "lb", "leaderboard"]}
+          ],
+          "minRubric": 3,
+          "minWords": 40,
+          "reference": "Хороший план: сделать быстрый subset/fold, короткие runs для ранжирования идей, держать честную validation, менять один фактор за раз, полный train запускать только для идей с локальным приростом и сохранять лучший submit.",
+          "hint": "Не все идеи заслуживают полного train.",
+          "explain": "Скорость экспериментов часто важнее знания редких архитектурных деталей."
+        }
+      ]
+    }
+  ]
+}

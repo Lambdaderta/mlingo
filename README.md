@@ -135,8 +135,8 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Публичный APK для тестеров публикуется через GitHub Releases:
 
 ```bash
-git tag -a v0.1.5 -m "MLingo v0.1.5"
-git push origin v0.1.5
+git tag -a v0.1.6 -m "MLingo v0.1.6"
+git push origin v0.1.6
 ```
 
 Workflow `release-apps` соберет Android APK и macOS zip, затем прикрепит их к Release. Подробности: [docs/apps.md](docs/apps.md).
@@ -154,7 +154,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.5-macOS.zip
+dist/MLingo-v0.1.6-macOS.zip
 ```
 
 ## Деплой
