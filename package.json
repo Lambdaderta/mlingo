@@ -18,7 +18,7 @@
     "cap:sync": "npm run cap:prepare && cap sync",
     "android:add": "npm run cap:prepare && cap add android",
     "android:debug": "npm run cap:prepare && cap sync android && cd android && ./gradlew assembleDebug",
-    "android:test": "cd android && ./gradlew testDebugUnitTest",
+    "android:test": "npm run cap:prepare && cap sync android && cd android && ./gradlew testDebugUnitTest",
     "android:open": "cap open android"
   },
   "dependencies": {

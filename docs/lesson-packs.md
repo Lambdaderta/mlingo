@@ -1,8 +1,15 @@
-# MLingo lesson packs
+# Паки заданий MLingo
 
-MLingo is offline-first: the app can ship with built-in lessons, load bundled JSON packs, import a local JSON file, or sync packs from GitHub.
+MLingo хранит задания отдельно от логики приложения. Это позволяет расширять банк упражнений через JSON-файлы, не пересобирая frontend и мобильное приложение.
 
-## Recommended GitHub layout
+Приложение умеет:
+
+- загружать bundled packs из репозитория;
+- импортировать локальный JSON-файл;
+- синхронизировать packs из GitHub raw URL;
+- сохранять загруженные packs в `localStorage` для оффлайн-режима.
+
+## Рекомендуемая структура в GitHub
 
 ```text
 lesson-packs/
@@ -12,30 +19,30 @@ lesson-packs/
   torch-pack.json
 ```
 
-`index.json` is the entry point:
+`index.json` — точка входа:
 
 ```json
 {
   "schemaVersion": 1,
   "id": "mlingo-pack-index",
-  "title": "MLingo lesson packs",
+  "title": "Паки заданий MLingo",
   "packs": [
     { "id": "cv-offline-pack-v1", "title": "CV Offline Expansion", "url": "./cv-offline-pack.json" }
   ]
 }
 ```
 
-The app can sync from a GitHub raw URL like:
+Приложение может синхронизироваться из GitHub raw URL:
 
 ```text
 https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json
 ```
 
-After sync, packs are saved in `localStorage`, so the same lessons remain available offline on desktop/mobile.
+После синхронизации packs сохраняются локально. На desktop и mobile они остаются доступными без сети.
 
-## Pack schema
+## Схема pack
 
-Each pack contains topics. A topic may be new, or may append lessons to an existing topic with the same `id`.
+Каждый pack содержит список тем. Тема может быть новой или может дополнять существующую тему с тем же `id`.
 
 ```json
 {
@@ -50,29 +57,31 @@ Each pack contains topics. A topic may be new, or may append lessons to an exist
       "tag": "cv",
       "icon": "CP",
       "color": "#b8a16d",
-      "copy": "Short description",
-      "rules": ["Rule 1", "Rule 2"],
+      "copy": "Короткое описание темы",
+      "rules": ["Правило 1", "Правило 2"],
       "lessons": []
     }
   ]
 }
 ```
 
-Supported lesson kinds:
+Поддерживаемые типы уроков:
 
 ```text
-order   arrange code blocks
-fill    fill blanks
-choice  choose one option
-bug     pick a broken line
-fix     edit broken code
-write   write code
-idea    free-form strategy answer checked by rubric keywords
+order   собрать строки кода в правильном порядке
+fill    заполнить пропуски
+choice  выбрать один вариант
+bug     найти строку с ошибкой
+fix     исправить готовый код
+write   написать код руками
+idea    написать план решения; локальная проверка по rubric keywords
 ```
 
-## Idea tasks
+## Идейные задачи
 
-`idea` tasks are intentionally not multiple-choice. They use a lightweight local rubric now and can later be upgraded to GPT review on the hosted site.
+`idea`-задачи специально не являются multiple choice. Они тренируют выбор подхода: validation, baseline, leakage, postprocess, быстрые эксперименты, риски private/public gap.
+
+Сейчас такие задачи проверяются локальной рубрикой. Позже на hosted-сайте их можно заменить или дополнить GPT-review.
 
 ```json
 {
@@ -87,8 +96,28 @@ idea    free-form strategy answer checked by rubric keywords
   ],
   "minRubric": 2,
   "minWords": 45,
-  "reference": "Good answer frame..."
+  "reference": "Эталонная рамка ответа..."
 }
 ```
 
-Local checking is not pretending to be a perfect judge. It enforces enough structure that the answer must mention the key ideas, while the reference answer teaches the intended plan after success.
+Локальная проверка не пытается быть идеальным судьей. Она заставляет ответ упомянуть ключевые блоки плана, а эталонная рамка после успеха показывает ожидаемое направление мысли.
+
+## Правила качества
+
+- `id` должен быть уникальным и написан в kebab-case.
+- `hint` должен помогать по конкретной задаче, а не говорить общие фразы.
+- `explain` должен объяснять идею после ответа.
+- Код в `answer`, `starter`, `code`, `blocks`, `lines` должен использовать только разрешенные библиотеки.
+- Для `order` можно добавить поле `answers`, если несколько порядков строк фактически эквивалентны.
+- Для `write` и `fix` желательно добавлять `testsText`, чтобы ученик понимал, какой контракт проверяется.
+
+## Проверка packs
+
+```bash
+npm run test:lessons
+npm run audit:lessons
+```
+
+`test:lessons` проверяет схему, уникальность `id`, структуру `idea`-рубрик и минимальный объем банка задач.
+
+`audit:lessons` проверяет, что в заданиях нет запрещенных библиотек.

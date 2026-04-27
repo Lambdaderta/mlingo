@@ -13,18 +13,18 @@ Browser / PWA
        -> Postgres
 ```
 
-Для первых 100 активных пользователей этого более чем достаточно. Главный bottleneck будет не Postgres, а качество задач и удобство добавления контента.
+Для первых 100 активных пользователей этого более чем достаточно. Главный узкий участок на старте — не PostgreSQL, а качество задач, удобство добавления контента и стабильность пользовательского опыта.
 
 ## Где деплоить
 
 Самые простые варианты:
 
-- Render: web service из Dockerfile + managed PostgreSQL. У Render есть custom domains и автоматический HTTPS.
-- Railway: удобно для Docker + Postgres, быстро поднять MVP, CLI показывает нужные DNS-записи для домена.
-- Fly.io: хорошо, если хочется Docker-first и контроль региона; custom domain добавляется через certificates.
-- VPS: дешевле и гибче, но придется самому ставить Docker, reverse proxy, SSL, backups.
+- Render: web service из Dockerfile + managed PostgreSQL. Есть custom domains и автоматический HTTPS.
+- Railway: удобно для Docker + PostgreSQL, быстро поднимается MVP, есть простая настройка домена.
+- Fly.io: хороший Docker-first вариант, если нужен контроль региона.
+- VPS: дешевле и гибче, но Docker, reverse proxy, SSL и backups придется обслуживать самостоятельно.
 
-Для старта я бы выбрал Render или Railway. VPS оставил бы на момент, когда захочется больше контроля и дешевле держать постоянную нагрузку.
+Для старта рекомендуется Render или Railway. VPS имеет смысл, когда понадобится больше контроля или станет важна стоимость постоянной нагрузки.
 
 Официальные доки:
 
@@ -41,8 +41,8 @@ Browser / PWA
    - branch: `main`;
    - root directory: пусто, если repo содержит файлы в корне;
    - health check path: `/api/health`.
-4. В Environment Variables добавь:
-   - `DATABASE_URL` — internal connection string от Render Postgres;
+4. В переменные окружения добавь:
+   - `DATABASE_URL` — internal connection string от Render PostgreSQL;
    - `MLINGO_ALLOWED_ORIGIN` — сначала `https://YOUR-SERVICE.onrender.com`, потом свой домен;
    - `PORT` — Render обычно сам дает порт через env, можно не задавать.
 5. Нажми Deploy.
@@ -57,7 +57,7 @@ Browser / PWA
 1. Создай project из GitHub repo.
 2. Добавь PostgreSQL service.
 3. Добавь web service из этого repo.
-4. В web service добавь env:
+4. В web service добавь переменные окружения:
    - `DATABASE_URL` из PostgreSQL variables;
    - `MLINGO_ALLOWED_ORIGIN=https://YOUR-DOMAIN`;
 5. Укажи старт через Dockerfile.
@@ -76,7 +76,7 @@ railway domain
 - Cloudflare Registrar;
 - Porkbun;
 - Namecheap;
-- Reg.ru или другой локальный регистратор.
+- Reg.ru или другой удобный локальный регистратор.
 
 Как выбрать:
 
@@ -108,10 +108,10 @@ https://mlingo.app
 - Проверь регистрацию и вход с телефона.
 - Создай тестового пользователя и пройди 2-3 урока.
 - Проверь leaderboard.
-- Проверь PWA install на iOS/Android.
+- Проверь установку PWA на iOS/Android.
 - Включи backups у Postgres.
 - Не коммить `.env` и дампы базы.
-- Для админских задач позже добавь отдельную роль/панель, сейчас все задачи лежат в `app.js`.
+- Для админских задач позже добавь отдельную роль и панель.
 
 ## Как обновлять сайт
 
@@ -119,19 +119,19 @@ https://mlingo.app
 2. Проверяешь:
 
 ```bash
-node --check app.js
-PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile server.py
-docker compose config
+npm test
+npm run check
 ```
 
 3. Коммитишь и пушишь в `main`.
-4. Render/Railway автоматически redeploy.
+4. Render или Railway автоматически запускает redeploy.
 
 ## Когда понадобится следующий шаг
 
-Когда задач станет очень много, лучше вынести контент из `app.js`:
+Когда задач станет очень много, лучше развивать контентную систему:
 
-- `lessons/*.json` или Postgres table `lessons`;
+- отдельные JSON packs в `lesson-packs/`;
+- таблица `lessons` в PostgreSQL для облачного каталога;
 - admin-only интерфейс для добавления упражнений;
 - версии уроков, чтобы не ломать прогресс старых пользователей;
 - импортер задач из Markdown/JSON.

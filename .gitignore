@@ -2,8 +2,11 @@ mlingo.db
 mlingo.db-shm
 mlingo.db-wal
 __pycache__/
+*.pyc
 .DS_Store
 .env
+.venv/
+postgres_data/
 node_modules/
 dist/
 web/

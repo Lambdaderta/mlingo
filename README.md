@@ -1,30 +1,42 @@
 # MLingo
 
-Темный PWA-тренажер для ручного ML-кода: короткие упражнения по CV, PyTorch, валидации, метрикам, NumPy/Pandas и бустингу.
+MLingo — темный offline-first тренажер для ручного ML-кода. Проект помогает готовиться к олимпиадам и коротким ML-контестам: задачи маленькие, но проверяют реальные навыки — PyTorch loops, CV, segmentation, validation, leakage, metrics, NumPy/Pandas, boosting, recsys и reranking.
 
-Проект source-available: код открыт для чтения, учебы и контрибьютов, но основной публичный инстанс предполагается один, на домене владельца проекта.
+Код открыт для чтения, обучения и контрибьютов. Основной публичный инстанс предполагается один: сайт владельца проекта с аккаунтами, прогрессом, стриками и таблицей лидеров.
 
-## Быстрый запуск через Docker
+## Возможности
+
+- PWA-интерфейс для desktop и mobile.
+- Оффлайн-профили и локальное сохранение прогресса.
+- Опциональный backend на Python + PostgreSQL для аккаунтов, синхронизации и leaderboard.
+- JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
+- Android APK через Capacitor.
+- GitHub Actions для проверок и публикации APK в GitHub Releases.
+- Типы упражнений: выбор ответа, порядок строк, пропуски, поиск бага, исправление кода, ручное написание кода и свободный разбор идеи.
+
+## Быстрый запуск
+
+Рекомендуемый локальный запуск с backend и PostgreSQL:
 
 ```bash
 docker compose up --build
 ```
 
-Открыть:
+После запуска приложение доступно по адресу:
 
 ```text
 http://localhost:4180/
 ```
 
-Compose поднимает:
+Docker Compose поднимает:
 
-- `app` — Python backend + статический PWA frontend;
+- `app` — Python backend и статический frontend;
 - `db` — PostgreSQL 16;
-- volume `postgres_data` — локальное постоянное хранилище базы.
+- `postgres_data` — локальное постоянное хранилище базы.
 
-## Запуск backend без Docker
+## Запуск без Docker
 
-Нужен PostgreSQL и Python-зависимости:
+Нужны PostgreSQL и Python-зависимости:
 
 ```bash
 python3 -m venv .venv
@@ -36,71 +48,74 @@ python3 server.py --port 4180
 
 Переменные окружения:
 
-- `DATABASE_URL` — PostgreSQL connection string.
-- `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.ru`.
+- `DATABASE_URL` — строка подключения к PostgreSQL.
+- `MLINGO_ALLOWED_ORIGIN` — origin сайта, например `https://mlingo.app`.
 - `PORT` — порт приложения, по умолчанию `4180`.
 
 ## API
 
-- `GET /api/health`
-- `POST /api/register`
-- `POST /api/login`
-- `POST /api/logout`
-- `GET /api/me`
-- `GET /api/progress`
-- `PUT /api/progress`
-- `POST /api/event`
-- `GET /api/leaderboard`
+- `GET /api/health` — проверка состояния backend и базы.
+- `POST /api/register` — регистрация пользователя.
+- `POST /api/login` — вход.
+- `POST /api/logout` — выход.
+- `GET /api/me` — текущий пользователь.
+- `GET /api/progress` — загрузка прогресса.
+- `PUT /api/progress` — сохранение прогресса.
+- `POST /api/event` — событие прохождения урока.
+- `GET /api/leaderboard` — таблица лидеров.
 
-В Postgres хранятся:
+В PostgreSQL хранятся пользователи, сессии, JSON прогресса, XP, стрики, ошибки, события уроков и leaderboard.
 
-- пользователи;
-- сессии;
-- полный JSON прогресса;
-- XP, стрик, число пройденных уроков, ошибки;
-- события прохождения уроков;
-- leaderboard.
+## Структура проекта
 
-## Что внутри
+- `index.html` — HTML-оболочка приложения.
+- `styles.css` — стили desktop/mobile интерфейса.
+- `app.js` — логика приложения, встроенные темы, прогресс и оффлайн-режим.
+- `lesson-packs/` — внешние JSON-паки заданий.
+- `server.py` — backend API, аккаунты, PostgreSQL и leaderboard.
+- `android/` — Capacitor Android shell.
+- `manifest.webmanifest` — настройки PWA.
+- `service-worker.js` — кэш и оффлайн-доступ.
+- `Dockerfile`, `docker-compose.yml` — локальный и production-запуск.
+- `scripts/` — проверки, аудит уроков и подготовка Capacitor bundle.
+- `docs/` — документация по деплою, мобильным сборкам и пакам заданий.
 
-- `index.html` — оболочка приложения.
-- `styles.css` — desktop/mobile layout, темный интерфейс в стиле `#1E1E1E`.
-- `app.js` — темы, упражнения, прогресс, стрик, очередь уроков.
-- `server.py` — API, аккаунты, PostgreSQL, leaderboard.
-- `Dockerfile`, `docker-compose.yml` — локальный и production-friendly запуск.
-- `manifest.webmanifest` — PWA-настройки для установки на телефон.
-- `service-worker.js` — offline/cache для PWA.
-- `CONTRIBUTING.md` — как добавлять упражнения.
-- `docs/allowed-libraries.md` — список библиотек, под которые можно писать задачи.
-- `scripts/audit_lessons.py` — быстрый аудит задач на запрещенные imports/packages.
-- `LICENSE` — source-available license.
+## Пак заданий
 
-## Обучающий формат
+Задания можно добавлять в `lesson-packs/*.json`, а индекс хранить в `lesson-packs/index.json`. Приложение умеет:
 
-- `choice`, `order`, `fill`, `bug` — короткий вход без усталости от набора.
-- `fix`, `write` — ручная правка и написание кода, сложность 3-5.
-- Богатые подсказки: кнопка `Подсказка` показывает не только намек, но и мини-словарь терминов вроде `Dice`, `IoU`, `OOF`, `logits`, `leakage`.
-- Адаптивная сложность: новые уровни в теме открываются по мере прохождения.
+- грузить bundled packs из репозитория;
+- импортировать JSON-файл локально;
+- синхронизировать packs из GitHub raw URL;
+- кэшировать загруженные packs в `localStorage`.
 
-## Мобильная версия
+Подробный формат описан в [docs/lesson-packs.md](docs/lesson-packs.md).
 
-Приложение работает как PWA:
+## Android APK
 
-- адаптивная верстка под телефон;
-- нижняя навигация;
-- `manifest.webmanifest` для установки;
-- service worker для кэша;
-- прогресс синхронизируется через аккаунт и Postgres.
-
-На iPhone/Android после деплоя на HTTPS открой сайт и добавь на главный экран:
-
-- iOS Safari: `Share` -> `Add to Home Screen`;
-- Android Chrome: меню -> `Install app` или `Add to Home screen`.
-
-Android APK можно раздавать через GitHub Releases:
+Локальная debug-сборка:
 
 ```bash
-git tag v0.1.0
+npm install
+npm run android:debug
+```
+
+APK будет создан здесь:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Установка на подключенный телефон:
+
+```bash
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Публичный APK для тестеров публикуется через GitHub Releases:
+
+```bash
+git tag -a v0.1.0 -m "MLingo v0.1.0"
 git push origin v0.1.0
 ```
 
@@ -108,16 +123,16 @@ Workflow `release-apk` соберет `MLingo-v0.1.0-debug.apk` и прикре�
 
 ## Деплой
 
-Рекомендуемый путь для первого публичного запуска:
+Для публичного запуска нужен web service и PostgreSQL. GitHub Pages подходит только для статического frontend, но MLingo использует аккаунты, сессии, синхронизацию прогресса и leaderboard.
 
-1. Хостинг: Render, Railway, Fly.io или VPS.
-2. База: managed PostgreSQL на том же провайдере или Neon/Supabase Postgres.
-3. Один домен для всего приложения: backend отдает и API, и frontend.
-4. HTTPS через провайдера или Cloudflare.
+Рекомендуемый путь:
 
-Почему не GitHub Pages: Pages подходит только для статического frontend. Здесь нужны аккаунты, база, сессии, leaderboard и API, поэтому нужен web service + Postgres.
+1. Render, Railway, Fly.io или VPS.
+2. Managed PostgreSQL или собственный PostgreSQL.
+3. Один HTTPS-домен для frontend и API.
+4. Автоматический redeploy из ветки `main`.
 
-Подробный гайд: [docs/deploy.md](docs/deploy.md).
+Подробная инструкция: [docs/deploy.md](docs/deploy.md).
 
 ## Проверки
 
@@ -128,5 +143,10 @@ npm run android:debug
 npm run android:test
 ```
 
-`npm test` проверяет синтаксис frontend, схему JSON-паков, allowed-библиотеки и базовые PWA-контракты.  
-`npm run check` дополнительно собирает Capacitor web bundle и прогоняет smoke-тест локального сайта.
+`npm test` проверяет синтаксис frontend, Python backend, схему JSON-паков, разрешенные библиотеки и базовые PWA-контракты.
+
+`npm run check` дополнительно собирает Capacitor web bundle и запускает smoke-тест локального сайта.
+
+## Контрибьютинг
+
+Перед добавлением задач прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) и список разрешенных библиотек в [docs/allowed-libraries.md](docs/allowed-libraries.md). Задания должны быть воспроизводимыми без интернета и без скачивания pretrained weights.

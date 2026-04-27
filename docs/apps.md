@@ -1,22 +1,22 @@
-# MLingo apps
+# Приложения MLingo
 
-MLingo is designed as an offline-first web app that can also be wrapped as native apps.
+MLingo работает как offline-first web app и может быть упакован в нативную оболочку для Android через Capacitor.
 
-## Current architecture
+## Архитектура
 
 ```text
-Core app: index.html + app.js + styles.css
-Lesson bank: built-in lessons + lesson-packs/*.json
-Progress: localStorage by default
-Online backend: optional Postgres API sync
-Native shell: Capacitor Android wrapper
+Frontend: index.html + app.js + styles.css
+Банк заданий: встроенные уроки + lesson-packs/*.json
+Локальный прогресс: localStorage
+Облачный прогресс: Python API + PostgreSQL
+Android: Capacitor wrapper
 ```
 
-This means the app works without a network connection. Accounts can be local-only now; hosted cloud sync can be enabled later without changing the lesson format.
+Приложение остается работоспособным без сети. Сейчас можно использовать локальные оффлайн-профили; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
 
 ## Android APK
 
-Prerequisites on macOS:
+Требования на macOS:
 
 ```bash
 brew install openjdk@21
@@ -25,26 +25,26 @@ export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 ```
 
-Install Android SDK packages:
+Установка пакетов Android SDK:
 
 ```bash
 sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 ```
 
-Build debug APK:
+Сборка debug APK:
 
 ```bash
 npm install
 npm run android:debug
 ```
 
-Output:
+Результат:
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Before shipping a build, run:
+Перед публикацией сборки:
 
 ```bash
 npm test
@@ -53,7 +53,7 @@ npm run android:debug
 npm run android:test
 ```
 
-Install to a connected phone:
+Установка на подключенный телефон:
 
 ```bash
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
@@ -66,7 +66,7 @@ APK не нужно хранить в git. В репе есть workflow `.githu
 Сделать новый релиз:
 
 ```bash
-git tag v0.1.0
+git tag -a v0.1.0 -m "MLingo v0.1.0"
 git push origin v0.1.0
 ```
 
@@ -80,33 +80,33 @@ GitHub repo -> Releases -> v0.1.0 -> Assets -> MLingo-v0.1.0-debug.apk
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 
-## macOS app options
+## Варианты для macOS
 
-Fastest useful option: install the PWA from Chrome/Safari once the site is hosted. It will cache lessons and progress locally.
+Самый быстрый вариант — установить PWA из Chrome или Safari после деплоя сайта на HTTPS. Приложение будет кэшировать интерфейс, задания и локальный прогресс.
 
-Native wrapper options:
+Варианты нативной оболочки:
 
 ```text
-1. Tauri: small desktop app, good long-term choice.
-2. Electron: easiest if we want Node APIs, heavier binary.
-3. WKWebView Swift shell: very lightweight, more native work.
+1. Tauri: легкое desktop-приложение, хороший долгосрочный вариант.
+2. Electron: проще всего, если нужны Node API, но бинарник тяжелее.
+3. WKWebView Swift shell: минимальная нативная оболочка, больше ручной работы.
 ```
 
-Recommended next step: keep the core app as PWA + Capacitor Android first. Add Tauri later if a real `.app` bundle is needed.
+Рекомендуемый порядок: сначала PWA и Android APK, затем Tauri, если понадобится полноценный `.app` bundle.
 
-## GitHub lesson sync
+## Синхронизация заданий из GitHub
 
-Keep packs in GitHub under:
+Паки заданий лежат в репозитории:
 
 ```text
 lesson-packs/index.json
 lesson-packs/*.json
 ```
 
-In the app, open `Шпаргалки -> Паки заданий`, then sync from:
+В приложении открой `Шпаргалки -> Паки заданий` и синхронизируй URL:
 
 ```text
 https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json
 ```
 
-The app stores synced packs locally. After one sync, the lessons are available offline.
+После успешной синхронизации приложение сохраняет packs в `localStorage`. Дальше эти задания доступны оффлайн.
