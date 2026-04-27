@@ -86,7 +86,9 @@ jobs:
           VERSION="$(node -p "require('./package.json').version")"
           SOURCE="dist/MLingo-v${VERSION}-macOS.zip"
           TARGET="dist/MLingo-${RELEASE_TAG}-macOS.zip"
-          cp "$SOURCE" "$TARGET"
+          if [ "$SOURCE" != "$TARGET" ]; then
+            cp "$SOURCE" "$TARGET"
+          fi
           echo "path=$TARGET" >> "$GITHUB_OUTPUT"
 
       - name: Upload macOS app to GitHub Release
