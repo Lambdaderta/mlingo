@@ -3429,6 +3429,14 @@ function cacheElements() {
     "profileStreak",
     "profileDone",
     "profileMisses",
+    "githubIntegrationPanel",
+    "githubIntegrationMark",
+    "githubIntegrationTitle",
+    "githubIntegrationSubtitle",
+    "githubConnectButton",
+    "githubDisconnectButton",
+    "githubRepoLine",
+    "githubIntegrationMessage",
     "focusModeButton",
     "dailyButton",
     "queueList",
@@ -3490,6 +3498,8 @@ function bindEvents() {
   els.registerButton?.addEventListener("click", () => submitAuth("register"));
   els.logoutButton?.addEventListener("click", logout);
   els.githubLoginButton?.addEventListener("click", startGithubLogin);
+  els.githubConnectButton?.addEventListener("click", startGithubLogin);
+  els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
   els.authUsername?.addEventListener("input", scheduleAuthChecks);
   els.authEmail?.addEventListener("input", scheduleAuthChecks);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
@@ -4436,9 +4446,30 @@ async function submitAuth(mode) {
 function startGithubLogin() {
   if (!runtimeConfig.githubOAuth) {
     showAuthStatus("GitHub-вход пока не настроен на сервере. Можно войти по логину/почте или создать локальный профиль.");
+    showGithubIntegrationMessage("GitHub OAuth не настроен на backend. Добавь GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET.", false);
     return;
   }
   window.location.assign(`${API_BASE}/api/auth/github/start`);
+}
+
+async function disconnectGithub() {
+  if (!currentUser) {
+    openAuthModal();
+    showGithubIntegrationMessage("Сначала войди в аккаунт MLingo.", false);
+    return;
+  }
+  if (!currentUser.github) {
+    showGithubIntegrationMessage("GitHub уже не подключен.", true);
+    return;
+  }
+  try {
+    const data = await apiRequest("/api/auth/github/disconnect", { method: "POST" });
+    currentUser = data.user;
+    renderAuthUi();
+    showGithubIntegrationMessage("GitHub отключен от аккаунта.", true);
+  } catch (error) {
+    showGithubIntegrationMessage(error.message);
+  }
 }
 
 async function submitLocalAuth(mode, { username, email, password, identity }) {
@@ -4727,6 +4758,41 @@ function renderAuthUi() {
   if (els.loginButton) els.loginButton.hidden = Boolean(currentUser);
   if (els.registerButton) els.registerButton.hidden = Boolean(currentUser);
   if (els.githubLoginButton) els.githubLoginButton.hidden = Boolean(currentUser) || !runtimeConfig.githubOAuth;
+  renderGithubIntegration();
+}
+
+function renderGithubIntegration() {
+  if (!els.githubIntegrationPanel) return;
+  const connected = Boolean(currentUser?.github);
+  els.githubIntegrationPanel.classList.toggle("is-connected", connected);
+  els.githubIntegrationPanel.classList.toggle("is-disabled", !runtimeConfig.githubOAuth && !connected);
+  els.githubIntegrationMark.textContent = connected ? "✓" : "GH";
+  els.githubIntegrationTitle.textContent = connected ? "Подключен к GitHub" : "GitHub не подключен";
+  if (connected) {
+    els.githubIntegrationSubtitle.textContent = `@${currentUser.github.login || currentUser.username}`;
+  } else if (runtimeConfig.githubOAuth) {
+    els.githubIntegrationSubtitle.textContent = currentUser ? "Можно привязать GitHub к текущему аккаунту." : "Войди через GitHub или привяжи его после регистрации.";
+  } else {
+    els.githubIntegrationSubtitle.textContent = "OAuth еще не настроен на сервере.";
+  }
+  if (els.githubConnectButton) els.githubConnectButton.hidden = connected || !runtimeConfig.githubOAuth;
+  if (els.githubDisconnectButton) els.githubDisconnectButton.hidden = !connected;
+  if (els.githubDisconnectButton) {
+    els.githubDisconnectButton.disabled = connected && !currentUser.hasPassword;
+    els.githubDisconnectButton.title = connected && !currentUser.hasPassword ? "Нельзя отключить единственный способ входа" : "";
+  }
+  if (els.githubRepoLine) {
+    const login = currentUser?.github?.login || currentUser?.username || "username";
+    els.githubRepoLine.innerHTML = connected
+      ? `Дальше: решения смогут пушиться в <code>${escapeHtml(login)}/mlingo-solutions</code>.`
+      : "Дальше: MLingo сможет пушить решения в твой репозиторий.";
+  }
+}
+
+function showGithubIntegrationMessage(text, good = false) {
+  if (!els.githubIntegrationMessage) return;
+  els.githubIntegrationMessage.textContent = text || "";
+  els.githubIntegrationMessage.className = `auth-hint ${good ? "is-good" : text ? "is-bad" : ""}`;
 }
 
 function shouldUseLocalAuthFallback(error) {

@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean9" />
-    <script defer src="./app.js?v=clean9"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean10" />
+    <script defer src="./app.js?v=clean10"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -147,6 +147,36 @@
                 <div class="profile-stat"><span>Пройдено</span><strong id="profileDone">0</strong></div>
                 <div class="profile-stat"><span>Ошибки</span><strong id="profileMisses">0</strong></div>
               </div>
+              <section class="integration-panel">
+                <div class="lesson-meta">
+                  <div>
+                    <span class="eyebrow">Интеграции</span>
+                    <h3>GitHub</h3>
+                  </div>
+                </div>
+                <p>Подключи GitHub, чтобы аккаунт MLingo был привязан к твоему профилю. Следующим шагом сюда ляжет автосохранение решений в personal repo.</p>
+                <div class="integration-status" id="githubIntegrationPanel">
+                  <div class="integration-mark" id="githubIntegrationMark">GH</div>
+                  <div>
+                    <strong id="githubIntegrationTitle">GitHub не подключен</strong>
+                    <small id="githubIntegrationSubtitle">Войди через GitHub, когда backend OAuth настроен.</small>
+                  </div>
+                  <div class="integration-actions">
+                    <button class="primary-button" id="githubConnectButton" type="button">Подключить</button>
+                    <button class="ghost-button danger-button" id="githubDisconnectButton" type="button">Отключить</button>
+                  </div>
+                </div>
+                <div class="integration-how">
+                  <strong>Как это будет работать</strong>
+                  <ul>
+                    <li>Сейчас: GitHub используется для входа и привязки аккаунта.</li>
+                    <li id="githubRepoLine">Дальше: MLingo сможет пушить решения в твой репозиторий.</li>
+                    <li>Решения можно будет отдавать другим как review-задачи.</li>
+                    <li>Дискуссии и leaderboard останутся быстрыми через базу MLingo.</li>
+                  </ul>
+                </div>
+                <div class="auth-hint" id="githubIntegrationMessage"></div>
+              </section>
               <section class="leaderboard-panel">
                 <div class="lesson-meta">
                   <div>

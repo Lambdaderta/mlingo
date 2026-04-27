@@ -820,6 +820,114 @@ textarea:focus-visible {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.integration-panel {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid rgba(145, 113, 198, 0.38);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    #131313;
+  background-size: 42px 42px;
+  padding: 1rem;
+}
+
+.integration-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.integration-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0.9rem;
+}
+
+.integration-status.is-connected {
+  border-color: rgba(61, 220, 151, 0.35);
+  background: rgba(37, 120, 83, 0.15);
+}
+
+.integration-status.is-disabled {
+  opacity: 0.78;
+}
+
+.integration-mark {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 0.9rem;
+  background: rgba(145, 113, 198, 0.18);
+  color: #c69bff;
+  font-family: var(--mono);
+  font-weight: 900;
+}
+
+.integration-status.is-connected .integration-mark {
+  background: rgba(61, 220, 151, 0.16);
+  color: #46e6a1;
+}
+
+.integration-status strong,
+.integration-status small {
+  display: block;
+}
+
+.integration-status small {
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+
+.integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.danger-button {
+  border-color: rgba(227, 139, 125, 0.42);
+  color: #ff9a8e;
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.integration-how {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.9rem;
+}
+
+.integration-how strong {
+  display: block;
+  margin-bottom: 0.65rem;
+}
+
+.integration-how ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.integration-how code {
+  color: #46e6a1;
+}
+
 .library-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 1rem;
@@ -1163,6 +1271,19 @@ body.focus-mode .screen-stack {
   .lesson-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .integration-status {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .integration-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .integration-actions button {
+    flex: 1;
   }
 
   .lesson-controls button {

@@ -8,7 +8,7 @@ MLingo — темный offline-first тренажер для ручного ML-
 
 - PWA-интерфейс для desktop и mobile.
 - Оффлайн-профили и локальное сохранение прогресса.
-- Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, синхронизации и leaderboard.
+- Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, интеграций, синхронизации и leaderboard.
 - JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
 - Android APK через Capacitor.
 - GitHub Actions для проверок и публикации APK в GitHub Releases.
@@ -63,6 +63,7 @@ python3 server.py --port 4180
 - `POST /api/login` — вход.
 - `GET /api/auth/github/start` — старт GitHub OAuth.
 - `GET /api/auth/github/callback` — callback от GitHub OAuth.
+- `POST /api/auth/github/disconnect` — отключение GitHub от аккаунта, если есть вход по паролю.
 - `POST /api/logout` — выход.
 - `GET /api/me` — текущий пользователь.
 - `GET /api/progress` — загрузка прогресса.

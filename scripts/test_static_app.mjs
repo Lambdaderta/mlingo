@@ -33,6 +33,7 @@ assert.ok(html.includes('id="packSyncButton"'), "index.html should include GitHu
 assert.ok(html.includes('id="packExportButton"'), "index.html should include pack export button");
 assert.ok(html.includes('id="packImportButton"'), "index.html should include pack import button");
 assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
+assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should include GitHub integrations panel");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -64,12 +65,15 @@ for (const pack of packIndex.packs) {
 assert.ok(app.includes("async function syncLessonPacksFromGithub"), "app should include GitHub lesson sync");
 assert.ok(app.includes("async function loadRuntimeConfig"), "app should load runtime backend config");
 assert.ok(app.includes("function startGithubLogin"), "app should include GitHub login flow");
+assert.ok(app.includes("async function disconnectGithub"), "app should include GitHub disconnect flow");
+assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
 assert.ok(app.includes("async function submitLocalAuth"), "app should include offline local auth fallback");
 assert.ok(app.includes("function saveLocalProgressForUser"), "app should save local account progress");
 assert.ok(server.includes("/api/auth/github/start"), "server should expose GitHub OAuth start endpoint");
 assert.ok(server.includes("/api/auth/github/callback"), "server should expose GitHub OAuth callback endpoint");
+assert.ok(server.includes("/api/auth/github/disconnect"), "server should expose GitHub OAuth disconnect endpoint");
 assert.ok(server.includes("/api/config"), "server should expose runtime config endpoint");
 assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 

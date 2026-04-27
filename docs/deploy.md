@@ -110,6 +110,8 @@ https://mlingo.app
 
 MLingo поддерживает GitHub OAuth как способ входа, похожий на TensorTonic: пользователь нажимает GitHub, подтверждает доступ, а прогресс хранится в базе MLingo. Для этого не нужны права на запись в репозитории.
 
+В профиле есть блок “Интеграции”: он показывает connected/disconnected состояние GitHub и позже станет местом для настройки репозитория решений.
+
 1. Открой GitHub → Settings → Developer settings → OAuth Apps → New OAuth App.
 2. Укажи:
    - Application name: `MLingo`;

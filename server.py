@@ -190,6 +190,7 @@ def public_user(row):
         "id": row["id"],
         "username": row["username"],
         "email": row.get("email"),
+        "hasPassword": bool(row.get("password_hash")),
         "createdAt": row["created_at"],
     }
     if row.get("github_id"):
@@ -574,6 +575,31 @@ class MLingoHandler(SimpleHTTPRequestHandler):
 
                 if path == "/api/auth/github/callback" and method == "GET":
                     self.handle_github_callback(db, parsed_url)
+                    return
+
+                if path == "/api/auth/github/disconnect" and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    if not user.get("github_id"):
+                        self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user)})
+                        return
+                    if not user.get("password_hash"):
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Сначала нужен вход по паролю, иначе аккаунт потеряет единственный способ входа")
+                        return
+                    user = db.execute(
+                        """
+                        update users
+                        set github_id = null,
+                            github_login = null,
+                            github_avatar_url = null,
+                            auth_provider = 'password'
+                        where id = %s
+                        returning *
+                        """,
+                        (user["id"],),
+                    ).fetchone()
+                    self.send_json(HTTPStatus.OK, {"ok": True, "user": public_user(user)})
                     return
 
                 if path == "/api/health" and method == "GET":
