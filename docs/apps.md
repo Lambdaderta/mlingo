@@ -76,7 +76,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.1-macOS.zip
+dist/MLingo-v0.1.2-macOS.zip
 ```
 
 Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
@@ -88,17 +88,17 @@ APK и macOS zip не нужно хранить в git. Workflow `.github/workfl
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.1 -m "MLingo v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "MLingo v0.1.2"
+git push origin v0.1.2
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.1 -> Assets
+GitHub repo -> Releases -> v0.1.2 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.1`, и workflow перезальет APK/macOS zip в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.2`, и workflow перезальет APK/macOS zip в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 

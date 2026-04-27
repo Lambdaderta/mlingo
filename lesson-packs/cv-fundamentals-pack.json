@@ -10,7 +10,7 @@
       "track": "Image IO / Masks / Boxes",
       "tag": "cv",
       "icon": "IM",
-      "color": "#c8b36f",
+      "color": "#c7a76a",
       "copy": "Ручная база: PIL/cv2, RGB/BGR, HWC/CHW, бинарные маски, bbox и IoU.",
       "rules": [
         "Всегда явно держи layout: HWC numpy или CHW tensor",
@@ -121,7 +121,7 @@
       "track": "Loss / Metrics / Validation",
       "tag": "cv",
       "icon": "SG",
-      "color": "#d6be76",
+      "color": "#dec27d",
       "copy": "То, что реально роляет в segmentation: BCEWithLogits, Dice, IoU, threshold и честный validation.",
       "rules": [
         "Loss получает logits, метрика обычно получает thresholded probabilities",
@@ -202,7 +202,7 @@
       "track": "CNN / U-Net / Classification",
       "tag": "cv",
       "icon": "AR",
-      "color": "#9caec7",
+      "color": "#8ea4c7",
       "copy": "Маленькие CNN/U-Net блоки без предобучек: shapes, channels, skip connections, logits.",
       "rules": [
         "В torch layout BCHW, channels dimension равен 1",

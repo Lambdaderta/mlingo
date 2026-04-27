@@ -1,20 +1,26 @@
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --panel: #17191f;
-  --panel-soft: #1f2229;
-  --panel-strong: #242832;
-  --ink: #f2f0eb;
-  --muted: #b8b1a6;
-  --faint: #8d877f;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.2);
-  --amber: #d3ad5f;
-  --amber-strong: #e5c77f;
-  --blue: #8b9bb4;
-  --blue-strong: #a8b5c8;
-  --red: #de8a76;
-  --code: #0d0f13;
+  --bg: #0b0d12;
+  --panel: #141720;
+  --panel-soft: #1a1e28;
+  --panel-strong: #232938;
+  --control: #1b1f2a;
+  --control-hover: #242a38;
+  --code: #090b10;
+  --code-soft: #12151d;
+  --ink: #f4f1e8;
+  --muted: #b6b4ad;
+  --faint: #858b96;
+  --line: rgba(210, 220, 235, 0.11);
+  --line-strong: rgba(218, 226, 240, 0.22);
+  --amber: #c7a76a;
+  --amber-strong: #dec27d;
+  --blue: #8ea4c7;
+  --blue-strong: #b4c7e8;
+  --green: #8bc7a1;
+  --red: #d78a7d;
+  --warm-control: #25231f;
+  --warm-control-hover: #302c24;
   --radius: 8px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -51,7 +57,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(211, 173, 95, 0.62);
+  outline: 2px solid rgba(199, 167, 106, 0.62);
   outline-offset: 2px;
 }
 
@@ -69,7 +75,7 @@ textarea:focus-visible {
   justify-content: space-between;
   gap: 1rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(15, 17, 21, 0.96);
+  background: rgba(11, 13, 18, 0.96);
   padding: 0.75rem clamp(1rem, 2vw, 1.5rem);
   backdrop-filter: blur(16px);
 }
@@ -95,8 +101,8 @@ textarea:focus-visible {
 
 .brand-mark,
 .avatar {
-  background: linear-gradient(135deg, var(--amber), var(--blue));
-  color: #171511;
+  background: linear-gradient(135deg, var(--amber), var(--blue-strong));
+  color: #12141a;
 }
 
 .brand-mark {
@@ -153,7 +159,7 @@ textarea:focus-visible {
   min-height: 2.65rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #1d2027;
+  background: var(--control);
   color: var(--ink);
   padding: 0.65rem 0.95rem;
   font-weight: 800;
@@ -164,20 +170,20 @@ textarea:focus-visible {
 .nav-button.is-active,
 .filter-chip.is-active,
 .mobile-tab.is-active {
-  border-color: rgba(211, 173, 95, 0.48);
-  background: #2a2d34;
+  border-color: rgba(199, 167, 106, 0.48);
+  background: var(--panel-strong);
   color: var(--ink);
 }
 
 .primary-button {
   background: var(--amber);
-  color: #141414;
+  color: #111318;
 }
 
 .next-button {
-  border-color: rgba(139, 155, 180, 0.44);
+  border-color: rgba(142, 164, 199, 0.44);
   background: var(--blue);
-  color: #11151c;
+  color: #10141d;
 }
 
 .ghost-button:hover,
@@ -185,13 +191,17 @@ textarea:focus-visible {
 .mobile-tab:hover,
 .nav-button:hover {
   border-color: var(--line-strong);
-  background: #272b34;
+  background: var(--control-hover);
 }
 
-.primary-button:hover,
+.primary-button:hover {
+  background: var(--amber-strong);
+  color: #101216;
+}
+
 .next-button:hover {
   background: var(--blue-strong);
-  color: #11151c;
+  color: #10141d;
 }
 
 .workspace {
@@ -320,14 +330,14 @@ textarea:focus-visible {
 }
 
 .module-button.is-active {
-  border-color: rgba(211, 173, 95, 0.5);
+  border-color: rgba(199, 167, 106, 0.5);
   background: var(--panel-strong);
 }
 
 .module-icon {
   width: 2.45rem;
   height: 2.45rem;
-  background: color-mix(in srgb, var(--module-color, var(--amber)) 54%, #20242d);
+  background: color-mix(in srgb, var(--module-color, var(--amber)) 48%, #171b25);
   color: white;
 }
 
@@ -473,13 +483,13 @@ textarea:focus-visible {
 }
 
 .road-node.is-current {
-  border-color: rgba(211, 173, 95, 0.58);
+  border-color: rgba(199, 167, 106, 0.58);
   background: var(--panel-strong);
   box-shadow: inset 3px 0 0 var(--amber);
 }
 
 .road-node.is-done {
-  background: #252b34;
+  background: #202635;
 }
 
 .road-node.is-locked {
@@ -491,7 +501,7 @@ textarea:focus-visible {
   width: 2.95rem;
   height: 2.95rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--node-color, var(--blue)) 52%, #20242d);
+  background: color-mix(in srgb, var(--node-color, var(--blue)) 46%, #171b25);
   color: white;
 }
 
@@ -567,7 +577,7 @@ textarea:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #2f2d29;
+  background: var(--warm-control);
   color: var(--ink);
   padding: 0.78rem 0.9rem;
   font-family: var(--mono);
@@ -581,7 +591,7 @@ textarea:focus-visible {
 .option-card:hover,
 .bug-line:hover {
   border-color: var(--line-strong);
-  background: #37342f;
+  background: var(--warm-control-hover);
 }
 
 .code-block:disabled {
@@ -614,7 +624,7 @@ textarea:focus-visible {
 
 .option-card.is-selected,
 .bug-line.is-selected {
-  border-color: rgba(211, 173, 95, 0.54);
+  border-color: rgba(199, 167, 106, 0.54);
   background: var(--panel-strong);
 }
 
@@ -639,7 +649,7 @@ textarea:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #181818;
+  background: var(--code-soft);
   color: var(--ink);
 }
 
@@ -697,7 +707,7 @@ textarea:focus-visible {
 .idea-rubric span {
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #222;
+  background: var(--control);
   color: var(--muted);
   padding: 0.4rem 0.6rem;
   font-size: 0.78rem;
@@ -725,7 +735,7 @@ textarea:focus-visible {
 .term-chip {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #252525;
+  background: var(--control);
   padding: 0.75rem;
 }
 
@@ -761,13 +771,13 @@ textarea:focus-visible {
 }
 
 .feedback.is-good {
-  border: 1px solid rgba(134, 199, 155, 0.35);
-  background: #253027;
+  border: 1px solid rgba(139, 199, 161, 0.34);
+  background: rgba(63, 104, 78, 0.22);
 }
 
 .feedback.is-bad {
-  border: 1px solid rgba(222, 138, 118, 0.35);
-  background: #332521;
+  border: 1px solid rgba(215, 138, 125, 0.35);
+  background: rgba(105, 57, 49, 0.27);
 }
 
 .review-panel {
@@ -823,12 +833,12 @@ textarea:focus-visible {
 .integration-panel {
   display: grid;
   gap: 0.9rem;
-  border: 1px solid rgba(145, 113, 198, 0.38);
+  border: 1px solid rgba(142, 164, 199, 0.28);
   border-radius: var(--radius);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    #131313;
+    linear-gradient(rgba(180, 199, 232, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 199, 232, 0.026) 1px, transparent 1px),
+    #10131a;
   background-size: 42px 42px;
   padding: 1rem;
 }
@@ -846,18 +856,18 @@ textarea:focus-visible {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(180, 199, 232, 0.035);
   padding: 0.9rem;
 }
 
 .integration-status.is-connected {
-  border-color: rgba(61, 220, 151, 0.35);
-  background: rgba(37, 120, 83, 0.15);
+  border-color: rgba(139, 199, 161, 0.35);
+  background: rgba(48, 103, 72, 0.18);
 }
 
 .integration-status.is-syncing {
-  border-color: rgba(211, 173, 95, 0.46);
-  background: rgba(211, 173, 95, 0.08);
+  border-color: rgba(199, 167, 106, 0.46);
+  background: rgba(199, 167, 106, 0.08);
 }
 
 .integration-status.is-disabled {
@@ -870,19 +880,19 @@ textarea:focus-visible {
   height: 3rem;
   place-items: center;
   border-radius: 0.9rem;
-  background: rgba(145, 113, 198, 0.18);
-  color: #c69bff;
+  background: rgba(142, 164, 199, 0.16);
+  color: var(--blue-strong);
   font-family: var(--mono);
   font-weight: 900;
 }
 
 .integration-status.is-connected .integration-mark {
-  background: rgba(61, 220, 151, 0.16);
-  color: #46e6a1;
+  background: rgba(139, 199, 161, 0.16);
+  color: var(--green);
 }
 
 .integration-status.is-syncing .integration-mark {
-  background: rgba(211, 173, 95, 0.16);
+  background: rgba(199, 167, 106, 0.16);
   color: var(--amber-strong);
 }
 
@@ -904,8 +914,8 @@ textarea:focus-visible {
 }
 
 .danger-button {
-  border-color: rgba(227, 139, 125, 0.42);
-  color: #ff9a8e;
+  border-color: rgba(215, 138, 125, 0.42);
+  color: #f3a195;
 }
 
 .danger-button:disabled {
@@ -936,7 +946,7 @@ textarea:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #181818;
+  background: var(--code-soft);
   color: var(--ink);
   padding: 0.72rem;
   font-family: var(--mono);
@@ -950,7 +960,7 @@ textarea:focus-visible {
 .integration-how {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(180, 199, 232, 0.035);
   padding: 0.9rem;
 }
 
@@ -969,7 +979,7 @@ textarea:focus-visible {
 }
 
 .integration-how code {
-  color: #46e6a1;
+  color: var(--green);
 }
 
 .feedback-note {
@@ -980,11 +990,11 @@ textarea:focus-visible {
 }
 
 .feedback-note.is-good {
-  color: #9bd7a8;
+  color: var(--green);
 }
 
 .feedback-note.is-bad {
-  color: #e38b7d;
+  color: var(--red);
 }
 
 .update-panel {
@@ -1057,7 +1067,7 @@ textarea:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #181818;
+  background: var(--code-soft);
   color: var(--ink);
   padding: 0.72rem;
   font-family: var(--mono);
@@ -1125,7 +1135,7 @@ textarea:focus-visible {
 
 .queue-row.is-current,
 .leaderboard-row.is-you {
-  border-color: rgba(211, 173, 95, 0.54);
+  border-color: rgba(199, 167, 106, 0.54);
   background: var(--panel-strong);
 }
 
@@ -1151,7 +1161,7 @@ textarea:focus-visible {
   height: 0.7rem;
   overflow: hidden;
   border-radius: 999px;
-  background: #191919;
+  background: var(--code-soft);
 }
 
 .progress-bar span {
@@ -1159,7 +1169,7 @@ textarea:focus-visible {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--amber), var(--blue));
+  background: linear-gradient(90deg, var(--amber), var(--blue-strong));
   transition: width 220ms ease;
 }
 
@@ -1207,11 +1217,11 @@ textarea:focus-visible {
 }
 
 .auth-hint.is-good {
-  color: #9bd7a8;
+  color: var(--green);
 }
 
 .auth-hint.is-bad {
-  color: #e38b7d;
+  color: var(--red);
 }
 
 .auth-actions {
@@ -1219,14 +1229,14 @@ textarea:focus-visible {
 }
 
 .github-button {
-  border-color: rgba(250, 250, 250, 0.18);
-  background: #111;
+  border-color: rgba(218, 226, 240, 0.18);
+  background: #10131a;
   color: var(--ink);
 }
 
 .github-button:hover {
-  border-color: rgba(211, 173, 95, 0.46);
-  background: #171717;
+  border-color: rgba(199, 167, 106, 0.46);
+  background: var(--control);
 }
 
 .icon-button {
@@ -1383,7 +1393,7 @@ body.focus-mode .screen-stack {
     gap: 0.4rem;
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: rgba(30, 30, 30, 0.94);
+    background: rgba(13, 15, 22, 0.94);
     padding: 0.35rem;
     backdrop-filter: blur(18px);
   }

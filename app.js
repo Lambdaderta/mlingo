@@ -4,7 +4,7 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const LOCAL_USERS_KEY = "mlingo.local.users.v1";
 const LOCAL_CURRENT_USER_KEY = "mlingo.local.current_user.v1";
@@ -24,7 +24,7 @@ const topics = [
     track: "Компьютерное зрение",
     tag: "cv",
     icon: "CV",
-    color: "#7cc8a3",
+    color: "#8ea4c7",
     copy: "База для Cuties segmentation: PIL/OpenCV, RGB/BGR, resize, бинарные маски, bbox, IoU.",
     rules: ["Изображение resize: bilinear", "Маска resize: nearest", "OpenCV читает BGR, PIL читает RGB"],
     lessons: [
@@ -173,7 +173,7 @@ const topics = [
     track: "Cuties / Radar",
     tag: "cv",
     icon: "SG",
-    color: "#d79a5f",
+    color: "#c7a76a",
     copy: "Практика вокруг Dataset, аугментаций, connected components, Dice/BCE и постпроцесса.",
     rules: ["Spatial transforms одинаковы для image и mask", "Sigmoid только для метрик", "Largest component может убрать шум"],
     lessons: [
@@ -328,7 +328,7 @@ const topics = [
     track: "Chicken counting / Radar",
     tag: "cv",
     icon: "BX",
-    color: "#c47b6f",
+    color: "#a98178",
     copy: "Bounding boxes, плотностные карты, подсчёт объектов, простая морфология и NMS.",
     rules: ["Count из density map = сумма", "NMS сортирует по score", "MAE удобен для counting"],
     lessons: [
@@ -550,7 +550,7 @@ const topics = [
     track: "PyTorch",
     tag: "torch",
     icon: "DL",
-    color: "#9bc69b",
+    color: "#9eabc0",
     copy: "Свои классы Dataset для картинок, масок, текста, таблиц и variable-length batch.",
     rules: ["`__len__` возвращает число объектов", "`__getitem__` возвращает один sample", "Для variable length нужен `collate_fn`"],
     lessons: [
@@ -655,7 +655,7 @@ const topics = [
     track: "Контестное мышление",
     tag: "contest",
     icon: "VA",
-    color: "#d7b56d",
+    color: "#dec27d",
     copy: "Holdout, stratify, group/time split, adversarial validation, OOF target encoding.",
     rules: ["fit preprocessing только на train", "OOF encoding для train", "test mapping после full train fit"],
     lessons: [
@@ -855,7 +855,7 @@ const topics = [
     track: "Контестная математика",
     tag: "contest",
     icon: "MX",
-    color: "#c79a76",
+    color: "#b28a75",
     copy: "Accuracy, F1, ROC-AUC, MAE/RMSE, Dice/IoU, выбор loss под задачу.",
     rules: ["Оптимизируй то, что похоже на метрику", "Порог подбирается на validation", "Loss не всегда равен leaderboard metric"],
     lessons: [
@@ -937,7 +937,7 @@ const topics = [
     track: "Модели",
     tag: "torch",
     icon: "AR",
-    color: "#8f9a7a",
+    color: "#8a97ac",
     copy: "Свертки, attention, embeddings, diffusion/RL/recsys ровно в объёме, полезном для контестов.",
     rules: ["Conv2d ждёт `[B,C,H,W]`", "Attention softmax по key dimension", "Embedding index dtype long"],
     lessons: [
@@ -5377,7 +5377,7 @@ function mergeLessonPack(pack) {
         track: incoming.track || pack.title || "Пак заданий",
         tag: incoming.tag || "contest",
         icon: incoming.icon || "PK",
-        color: incoming.color || "#8b9bb4",
+        color: incoming.color || "#8ea4c7",
         copy: incoming.copy || "Импортированный набор заданий.",
         rules: incoming.rules || [],
         lessons: [],

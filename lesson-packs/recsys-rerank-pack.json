@@ -10,7 +10,7 @@
       "track": "Candidates / Rerankers",
       "tag": "recsys",
       "icon": "RS",
-      "color": "#c9b778",
+      "color": "#c7a76a",
       "copy": "Двухстадийные рекомендации: сначала recall через candidates, потом reranker сортирует пары user-item.",
       "rules": [
         "Если candidate generator не принес true item, reranker уже не спасет",
@@ -96,7 +96,7 @@
       "track": "Recall / MAP / NDCG",
       "tag": "recsys",
       "icon": "RK",
-      "color": "#9caec7",
+      "color": "#8ea4c7",
       "copy": "Ручная реализация метрик, чтобы не путать global accuracy с per-user ranking quality.",
       "rules": [
         "Ranking metric обычно считается отдельно по user, потом усредняется",
@@ -164,7 +164,7 @@
       "track": "OOF / Time split / Encoding",
       "tag": "validation",
       "icon": "VL",
-      "color": "#c8b36f",
+      "color": "#dec27d",
       "copy": "Валидация для ML-олимпиад: OOF target encoding, GroupKFold, time cutoff и early stopping.",
       "rules": [
         "Все fit-статистики считаются только на train-fold",

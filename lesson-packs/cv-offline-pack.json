@@ -10,7 +10,7 @@
       "track": "Segmentation / Classification",
       "tag": "cv",
       "icon": "CP",
-      "color": "#b8a16d",
+      "color": "#c7a76a",
       "copy": "Практика пайплайнов: small-data segmentation, classification, validation, threshold, postprocess.",
       "rules": [
         "Backbone можно заморозить, маленькую голову обучать",
@@ -226,7 +226,7 @@
       "track": "Contest decisions",
       "tag": "cv",
       "icon": "ID",
-      "color": "#8b9bb4",
+      "color": "#8ea4c7",
       "copy": "Свободные ответы: план эксперимента, ранжирование идей, риски leakage и быстрые проверки.",
       "rules": [
         "Пиши план: validation -> baseline -> experiment -> risk",
