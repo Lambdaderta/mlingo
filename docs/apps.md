@@ -11,10 +11,10 @@ Frontend: index.html + app.js + styles.css
 GitHub-прогресс без сервера: local token + GitHub Contents API
 Облачный прогресс позже: Python API + PostgreSQL
 Android: Capacitor wrapper с immersive mode
-macOS: Swift WKWebView wrapper
+macOS: native AppKit + WKWebView wrapper
 ```
 
-Приложение остается работоспособным без сети. Сейчас можно использовать локальные оффлайн-профили и serverless GitHub sync; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
+Регистрация обязательна перед уроками. Без backend приложение предлагает локальный оффлайн-аккаунт; при backend с `GITHUB_CLIENT_ID` и `GITHUB_CLIENT_SECRET` кнопка GitHub OAuth создает или открывает аккаунт MLingo автоматически. Приложение остается работоспособным без сети: можно использовать локальные оффлайн-профили и serverless GitHub sync; после деплоя на домен тот же frontend сможет синхронизировать прогресс через backend.
 
 ## Android APK
 
@@ -76,7 +76,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.2-macOS.zip
+dist/MLingo-v0.1.3-macOS.zip
 ```
 
 Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
@@ -88,17 +88,17 @@ APK и macOS zip не нужно хранить в git. Workflow `.github/workfl
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.2 -m "MLingo v0.1.2"
-git push origin v0.1.2
+git tag -a v0.1.3 -m "MLingo v0.1.3"
+git push origin v0.1.3
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.2 -> Assets
+GitHub repo -> Releases -> v0.1.3 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.2`, и workflow перезальет APK/macOS zip в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать tag, например `v0.1.3`, и workflow перезальет APK/macOS zip в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 

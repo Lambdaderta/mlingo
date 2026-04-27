@@ -4,7 +4,7 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.1.3";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const LOCAL_USERS_KEY = "mlingo.local.users.v1";
 const LOCAL_CURRENT_USER_KEY = "mlingo.local.current_user.v1";
@@ -16,6 +16,7 @@ const DEFAULT_PACK_URLS = [
 ];
 const DEFAULT_PACK_INDEX_URL = "https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json";
 const API_BASE = window.MLINGO_API_BASE || "";
+const AUTH_REQUIRED = true;
 
 const topics = [
   {
@@ -3391,7 +3392,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadLessonPacks().then(() => {
     ensureValidTopicSelection();
     renderAll();
-    bootstrapAccount();
+    bootstrapAccount().finally(enforceAuthGate);
   });
   registerServiceWorker();
 });
@@ -3465,6 +3466,7 @@ function cacheElements() {
     "registerButton",
     "logoutButton",
     "githubLoginButton",
+    "githubAuthHint",
     "authStatus",
     "leaderboardList",
     "packExportButton",
@@ -4417,13 +4419,27 @@ function showFeedback(label, text, good) {
   els.feedbackBox.innerHTML = `<strong>${escapeHtml(label)}.</strong>${formatFeedbackText(text)}`;
 }
 
+function isAuthLocked() {
+  return AUTH_REQUIRED && !currentUser;
+}
+
+function enforceAuthGate() {
+  renderAuthUi();
+  if (isAuthLocked()) openAuthModal();
+}
+
 function openAuthModal() {
   els.authModal.hidden = false;
-  renderAuthUi();
+  els.authModal.dataset.locked = isAuthLocked() ? "true" : "false";
+  renderAuthUi({ skipGate: true });
   els.authUsername?.focus();
 }
 
 function closeAuthModal() {
+  if (isAuthLocked()) {
+    showAuthStatus("Сначала создай аккаунт или войди. Потом MLingo откроет карту и уроки.");
+    return;
+  }
   els.authModal.hidden = true;
 }
 
@@ -4460,6 +4476,7 @@ async function submitAuth(mode) {
     renderLeaderboard(data.leaderboard);
     saveState();
     renderAll();
+    closeAuthModal();
     showAuthStatus(mode === "login" ? "Вошёл. Прогресс синхронизирован." : "Аккаунт создан. Прогресс теперь в базе.", true);
   } catch (error) {
     if (shouldUseLocalAuthFallback(error)) {
@@ -4472,7 +4489,8 @@ async function submitAuth(mode) {
 
 function startGithubLogin() {
   if (!runtimeConfig.githubOAuth) {
-    showAuthStatus("GitHub-вход пока не настроен на сервере. Можно войти по логину/почте или создать локальный профиль.");
+    openAuthModal();
+    showAuthStatus("GitHub-регистрация появится, когда MLingo открыт через backend с GITHUB_CLIENT_ID и GITHUB_CLIENT_SECRET. Сейчас можно создать локальный аккаунт.");
     showGithubIntegrationMessage("Backend OAuth не настроен. Для serverless sync используй GitHub token ниже.", false);
     return;
   }
@@ -4626,7 +4644,9 @@ async function submitLocalAuth(mode, { username, email, password, identity }) {
     setLocalCurrentUser(username);
     saveLocalProgressForUser(username);
     currentUser = { username, email, local: true };
-    renderAuthUi();
+    renderAll();
+    renderLeaderboard([]);
+    closeAuthModal();
     showAuthStatus("Онлайн API недоступен, создан локальный профиль. Прогресс хранится на этом устройстве.", true);
     return;
   }
@@ -4647,6 +4667,7 @@ async function submitLocalAuth(mode, { username, email, password, identity }) {
   loadLocalProgressForUser(user.username);
   renderAll();
   renderLeaderboard([]);
+  closeAuthModal();
   showAuthStatus("Вошёл в локальный профиль. Работает полностью оффлайн.", true);
 }
 
@@ -4875,15 +4896,29 @@ function mergeRemoteProgress(progress) {
   isApplyingRemote = false;
 }
 
-function renderAuthUi() {
+function renderAuthUi({ skipGate = false } = {}) {
   if (!els.accountButton) return;
   const provider = currentUser?.github?.login ? " · GitHub" : currentUser?.local ? " · local" : "";
-  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "Войти";
+  const locked = isAuthLocked();
+  document.body.classList.toggle("auth-required", locked);
+  els.accountButton.textContent = currentUser ? `@${currentUser.username}${provider}` : "Регистрация";
+  if (els.authModal) els.authModal.dataset.locked = locked ? "true" : "false";
+  if (els.authCloseButton) els.authCloseButton.hidden = locked;
   if (els.logoutButton) els.logoutButton.hidden = !currentUser;
   if (els.loginButton) els.loginButton.hidden = Boolean(currentUser);
   if (els.registerButton) els.registerButton.hidden = Boolean(currentUser);
-  if (els.githubLoginButton) els.githubLoginButton.hidden = Boolean(currentUser) || !runtimeConfig.githubOAuth;
+  if (els.githubLoginButton) {
+    els.githubLoginButton.hidden = Boolean(currentUser);
+    els.githubLoginButton.disabled = Boolean(currentUser);
+    els.githubLoginButton.classList.toggle("is-unavailable", !runtimeConfig.githubOAuth && !currentUser);
+  }
+  if (els.githubAuthHint) {
+    els.githubAuthHint.textContent = runtimeConfig.githubOAuth
+      ? "GitHub создаст аккаунт автоматически и привяжет профиль."
+      : "OAuth нужен backend; оффлайн можно создать локальный аккаунт.";
+  }
   renderGithubIntegration();
+  if (locked && !skipGate && els.authModal?.hidden) openAuthModal();
 }
 
 function renderGithubIntegration() {

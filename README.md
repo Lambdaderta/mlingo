@@ -8,6 +8,7 @@ MLingo — темный offline-first тренажер для ручного ML-
 
 - PWA-интерфейс для desktop и mobile.
 - Оффлайн-профили и локальное сохранение прогресса.
+- Обязательная регистрация перед уроками: локальный аккаунт оффлайн или GitHub OAuth при включенном backend.
 - Serverless GitHub sync: прогресс и решения можно сохранять в свой `mlingo-solutions` без backend.
 - Опциональный backend на Python + PostgreSQL для аккаунтов, GitHub-входа, интеграций, синхронизации и leaderboard.
 - JSON-паки заданий, которые можно хранить в GitHub и подгружать без пересборки приложения.
@@ -64,7 +65,7 @@ python3 server.py --port 4180
 - `GET /api/config` — публичная runtime-конфигурация frontend.
 - `POST /api/register` — регистрация пользователя.
 - `POST /api/login` — вход.
-- `GET /api/auth/github/start` — старт GitHub OAuth.
+- `GET /api/auth/github/start` — старт GitHub OAuth; при первом входе GitHub-профиль автоматически создает аккаунт MLingo.
 - `GET /api/auth/github/callback` — callback от GitHub OAuth.
 - `POST /api/auth/github/disconnect` — отключение GitHub от аккаунта, если есть вход по паролю.
 - `POST /api/github/repo/enable` — создать или подключить solutions repo.
@@ -134,8 +135,8 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Публичный APK для тестеров публикуется через GitHub Releases:
 
 ```bash
-git tag -a v0.1.2 -m "MLingo v0.1.2"
-git push origin v0.1.2
+git tag -a v0.1.3 -m "MLingo v0.1.3"
+git push origin v0.1.3
 ```
 
 Workflow `release-apps` соберет Android APK и macOS zip, затем прикрепит их к Release. Подробности: [docs/apps.md](docs/apps.md).
@@ -153,7 +154,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.2-macOS.zip
+dist/MLingo-v0.1.3-macOS.zip
 ```
 
 ## Деплой

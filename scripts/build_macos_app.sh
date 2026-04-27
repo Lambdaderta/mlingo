@@ -21,6 +21,8 @@ CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/clang-module-cache" clang \
   -framework WebKit
 
 cp "$ROOT_DIR/macos/Info.plist" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_VERSION" "$APP_DIR/Contents/Info.plist"
 cp "$ROOT_DIR/index.html" "$ROOT_DIR/app.js" "$ROOT_DIR/styles.css" "$ROOT_DIR/service-worker.js" "$ROOT_DIR/manifest.webmanifest" "$ROOT_DIR/icon.svg" "$WEB_DIR/"
 mkdir -p "$WEB_DIR/lesson-packs"
 cp "$ROOT_DIR"/lesson-packs/*.json "$WEB_DIR/lesson-packs/"
