@@ -671,6 +671,7 @@ body[data-screen="topics"] .workspace {
   color: var(--ink);
   padding: 1rem;
   text-align: left;
+  text-decoration: none;
 }
 
 .road-node.is-current {

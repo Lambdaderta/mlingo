@@ -401,7 +401,10 @@ let currentLessonIndex = state.currentLessonIndex || 0;
 let currentScreen = state.currentScreen || "roadmap";
 let currentTheoryId = state.currentTheoryId || theoryChapters[0].id;
 let currentTheoryArticleIndex = state.currentTheoryArticleIndex || 0;
-const requestedScreen = new URLSearchParams(window.location.search).get("screen");
+const initialRouteParams = new URLSearchParams(window.location.search);
+const requestedScreen = initialRouteParams.get("screen");
+const requestedTopicId = initialRouteParams.get("topic");
+const requestedLessonIndex = initialRouteParams.get("lesson");
 if (["roadmap", "topics", "lesson", "review", "profile", "library"].includes(requestedScreen)) currentScreen = requestedScreen;
 let selectedBlocks = [];
 let selectedOption = null;
@@ -426,6 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   loadRuntimeConfig();
   loadLessonPacks().then(() => {
+    applyInitialRoute();
     ensureValidTopicSelection();
     renderAll();
     bootstrapAccount().finally(() => {
@@ -556,6 +560,7 @@ function bindEvents() {
   els.reportLessonButton?.addEventListener("click", () => openIssueReport({ lesson: getCurrentLesson(), topic: getCurrentTopic() }));
   els.reportAppButton?.addEventListener("click", () => openIssueReport({}));
   els.resetButton.addEventListener("click", renderLesson);
+  els.roadmapPath?.addEventListener("click", handleRoadmapClick);
   els.prevButton?.addEventListener("click", previousLesson);
   els.checkButton.addEventListener("click", checkAnswer);
   els.nextButton.addEventListener("click", nextLesson);
@@ -673,6 +678,18 @@ function openLessonAt(topicId, lessonIndex = 0) {
   setScreen("lesson");
 }
 
+function applyInitialRoute() {
+  if (!requestedTopicId) return;
+  const topic = topics.find((item) => item.id === requestedTopicId);
+  if (!topic) return;
+  const index = Number.parseInt(requestedLessonIndex, 10);
+  currentTopicId = topic.id;
+  currentLessonIndex = Number.isInteger(index) && topic.lessons[index] ? index : 0;
+  state.currentTopicId = currentTopicId;
+  state.currentLessonIndex = currentLessonIndex;
+  if (requestedScreen === "lesson") currentScreen = "lesson";
+}
+
 function renderAll() {
   ensureCurrentLessonAvailable();
   renderTopics(document.querySelector(".filter-chip.is-active")?.dataset.filter || "all");
@@ -708,8 +725,26 @@ function setScreen(screen, persist = true) {
   if (persist) {
     state.currentScreen = screen;
     saveState();
+    updateBrowserRoute(screen);
   }
   if (screen === "review") fetchReviewSolutions({ silent: reviewSolutions.length > 0 });
+}
+
+function updateBrowserRoute(screen) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("screen", screen);
+    if (screen === "lesson") {
+      url.searchParams.set("topic", currentTopicId);
+      url.searchParams.set("lesson", String(currentLessonIndex));
+    } else {
+      url.searchParams.delete("topic");
+      url.searchParams.delete("lesson");
+    }
+    window.history.replaceState(null, "", url);
+  } catch {
+    // The persisted state still keeps navigation working if history is unavailable.
+  }
 }
 
 function renderTopics(filter = "all") {
@@ -763,10 +798,17 @@ function renderRoadmap() {
     const isDone = Boolean(state.completed[lesson.id]);
     const isCurrent = index === currentLessonIndex;
     const isLocked = (lesson.difficulty || 1) > level;
-    const node = document.createElement("button");
+    const node = document.createElement(isLocked ? "button" : "a");
     node.className = `road-node${isDone ? " is-done" : ""}${isCurrent ? " is-current" : ""}${isLocked ? " is-locked" : ""}`;
-    node.type = "button";
-    node.disabled = isLocked;
+    node.dataset.roadTopic = topic.id;
+    node.dataset.roadIndex = String(index);
+    if (isLocked) {
+      node.type = "button";
+      node.disabled = true;
+      node.setAttribute("aria-disabled", "true");
+    } else {
+      node.href = buildLessonHref(topic.id, index);
+    }
     node.style.setProperty("--node-color", topic.color);
     node.innerHTML = `
       <span class="road-node-icon">${isLocked ? "L" : isDone ? "✓" : index + 1}</span>
@@ -775,12 +817,23 @@ function renderRoadmap() {
         <small>${lessonLabels[lesson.kind]} · сложность ${lesson.difficulty || 1}/5${isLocked ? " · откроется позже" : ""}</small>
       </span>
     `;
-    node.addEventListener("click", () => {
-      if (isLocked) return;
-      openLessonAt(topic.id, index);
-    });
     els.roadmapPath.appendChild(node);
   });
+}
+
+function buildLessonHref(topicId, lessonIndex) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("screen", "lesson");
+  url.searchParams.set("topic", topicId);
+  url.searchParams.set("lesson", String(lessonIndex));
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function handleRoadmapClick(event) {
+  const node = event.target.closest("[data-road-topic][data-road-index]");
+  if (!node || node.getAttribute("aria-disabled") === "true" || node.disabled) return;
+  event.preventDefault();
+  openLessonAt(node.dataset.roadTopic, Number(node.dataset.roadIndex));
 }
 
 function renderLesson() {
