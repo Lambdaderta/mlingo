@@ -45,6 +45,7 @@ assert.ok(!html.includes('id="registerButton"'), "index.html should not include 
 assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should include GitHub integrations panel");
 assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
 assert.ok(html.includes('id="githubTokenInput"'), "index.html should include serverless GitHub token input");
+assert.ok(!html.includes('placeholder="Lambdaderta"'), "GitHub owner field should not default to the project maintainer");
 assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include update checker button");
 assert.ok(html.includes('id="guideModal"'), "index.html should include welcome guide modal");
 assert.ok(html.includes('id="guideButton"'), "index.html should include guide reopen button");
@@ -103,6 +104,9 @@ assert.ok(app.includes("async function syncSolutionIfEnabled"), "app should sync
 assert.ok(app.includes("async function pushProgressToGithubDirect"), "app should push progress to GitHub without backend");
 assert.ok(app.includes("async function checkForUpdates"), "app should check GitHub Releases for updates");
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
+assert.ok(app.includes("function navigateToScreen"), "app should route nav buttons through screen-specific handlers");
+assert.ok(app.includes("function openCurrentLesson"), "lesson nav should explicitly render/open the current lesson");
+assert.ok(app.includes("function openLessonAt"), "roadmap lesson nodes should explicitly open selected lessons");
 assert.ok(app.includes("const GUIDE_SEEN_KEY"), "app should remember whether welcome guide was seen");
 assert.ok(app.includes("function maybeOpenGuide"), "app should open the welcome guide on first run");
 assert.ok(app.includes("const theoryChapters"), "app should include a structured built-in theory section");

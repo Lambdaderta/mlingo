@@ -5,7 +5,7 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "0.1.0";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const PROJECT_ISSUES_URL = "https://github.com/Lambdaderta/mlingo/issues/new";
 const PYODIDE_LOCAL_SCRIPT = "./vendor/pyodide/pyodide.js";
@@ -540,7 +540,7 @@ function cacheElements() {
 
 function bindEvents() {
   document.querySelectorAll("[data-screen]").forEach((button) => {
-    button.addEventListener("click", () => setScreen(button.dataset.screen));
+    button.addEventListener("click", () => navigateToScreen(button.dataset.screen));
   });
 
   document.querySelectorAll(".filter-chip").forEach((button) => {
@@ -598,7 +598,7 @@ function bindEvents() {
   });
   els.guideLessonButton?.addEventListener("click", () => {
     closeGuideModal({ remember: true });
-    setScreen("lesson");
+    openCurrentLesson();
   });
   els.guideLaterButton?.addEventListener("click", () => closeGuideModal({ remember: false }));
   els.authCloseButton?.addEventListener("click", closeAuthModal);
@@ -646,6 +646,31 @@ function closeAccountMenu() {
   if (!els.accountMenu) return;
   els.accountMenu.hidden = true;
   els.accountButton?.setAttribute("aria-expanded", "false");
+}
+
+function navigateToScreen(screen) {
+  if (screen === "lesson") {
+    openCurrentLesson();
+    return;
+  }
+  setScreen(screen);
+}
+
+function openCurrentLesson() {
+  ensureValidTopicSelection();
+  renderLesson();
+  renderSidebar();
+  setScreen("lesson");
+}
+
+function openLessonAt(topicId, lessonIndex = 0) {
+  currentTopicId = topicId;
+  currentLessonIndex = Number(lessonIndex) || 0;
+  ensureValidTopicSelection();
+  state.currentTopicId = currentTopicId;
+  state.currentLessonIndex = currentLessonIndex;
+  renderAll();
+  setScreen("lesson");
 }
 
 function renderAll() {
@@ -752,11 +777,7 @@ function renderRoadmap() {
     `;
     node.addEventListener("click", () => {
       if (isLocked) return;
-      currentLessonIndex = index;
-      state.currentLessonIndex = index;
-      saveState();
-      renderAll();
-      setScreen("lesson");
+      openLessonAt(topic.id, index);
     });
     els.roadmapPath.appendChild(node);
   });
@@ -2610,7 +2631,7 @@ function renderGithubIntegration() {
   }
   if (els.githubRepoDisableButton) els.githubRepoDisableButton.hidden = !repoEnabled && !directReady;
   if (els.githubOwnerInput) {
-    els.githubOwnerInput.value = direct.owner || els.githubOwnerInput.value || currentUser?.github?.login || "";
+    els.githubOwnerInput.value = direct.owner || els.githubOwnerInput.value || "";
     els.githubOwnerInput.disabled = directReady;
   }
   if (els.githubRepoInput) {
