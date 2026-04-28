@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "id": "detection-vrd-pack-v1",
+  "title": "Detection and Visual Relations Pack",
+  "description": "Object detection dataset formats, DETR target preparation and CatBoost predicate classification for visual relationship tasks.",
+  "topics": [
+    {
+      "id": "detection-dataset-formats",
+      "title": "Detection: форматы датасетов",
+      "track": "COCO / VOC / YOLO",
+      "tag": "cv",
+      "icon": "BX",
+      "color": "#c7a76a",
+      "copy": "Как выглядят обычные detection-разметки: картинки, boxes, classes, image_id, bbox formats и дедуп объектов.",
+      "rules": [
+        "COCO bbox хранит absolute [x, y, width, height]",
+        "YOLO txt хранит normalized [class, cx, cy, w, h]",
+        "Для detection один физический объект не должен дублироваться из-за нескольких predicates"
+      ],
+      "lessons": [
+        {
+          "id": "det-coco-bbox-format",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "COCO bbox",
+          "prompt": "В каком формате COCO обычно хранит `bbox` в annotation?",
+          "options": ["[x_min, y_min, width, height] в пикселях", "[x1, y1, x2, y2] normalized", "[cx, cy, w, h] normalized", "[class, x1, y1, x2, y2]"],
+          "answer": "[x_min, y_min, width, height] в пикселях",
+          "hint": "COCO JSON хранит абсолютные координаты и width/height, а не правый нижний угол.",
+          "explain": "В COCO annotation `bbox=[x,y,w,h]`, `area=w*h`, `category_id` отдельно. Это отличается от DETR target boxes.",
+          "terms": ["bbox", "coco"]
+        },
+        {
+          "id": "det-xyxy-to-xywh",
+          "kind": "write",
+          "difficulty": 2,
+          "title": "xyxy -> COCO xywh",
+          "prompt": "Напиши конвертацию bbox `[x1,y1,x2,y2]` в COCO `[x,y,w,h]`.",
+          "starter": "def xyxy_to_xywh(box):",
+          "answer": "def xyxy_to_xywh(box):\n    x1, y1, x2, y2 = box\n    return [x1, y1, x2 - x1, y2 - y1]",
+          "testsText": "Проверяется, что x/y остаются левым верхним углом, а ширина/высота считаются разностью.",
+          "hint": "COCO не хранит x2/y2 напрямую.",
+          "explain": "Эта функция нужна при сборке COCO-style annotations из таблицы с x1/y1/x2/y2.",
+          "terms": ["bbox", "coco"]
+        },
+        {
+          "id": "det-xyxy-to-cxcywh-norm",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "xyxy -> DETR boxes",
+          "prompt": "Напиши конвертацию `[x1,y1,x2,y2]` в normalized `[cx,cy,w,h]` для изображения размера `img_w,img_h`.",
+          "starter": "def xyxy_to_cxcywh_norm(box, img_w, img_h):",
+          "answer": "def xyxy_to_cxcywh_norm(box, img_w, img_h):\n    x1, y1, x2, y2 = box\n    w = x2 - x1\n    h = y2 - y1\n    cx = x1 + w / 2\n    cy = y1 + h / 2\n    return [cx / img_w, cy / img_h, w / img_w, h / img_h]",
+          "testsText": "Проверяется center format и normalized координаты 0..1.",
+          "hint": "DETR loss обычно сравнивает normalized center boxes, а не COCO xywh.",
+          "explain": "Одна и та же annotation может жить в COCO JSON как xywh absolute, но идти в model target как cxcywh normalized.",
+          "terms": ["bbox", "detr"]
+        },
+        {
+          "id": "det-yolo-format-choice",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "YOLO txt",
+          "prompt": "Как обычно выглядит одна строка YOLO-разметки для объекта?",
+          "options": ["class_id cx cy w h, все координаты normalized", "image_id x y w h category_id", "x1 y1 x2 y2 label predicate", "xml с тегом bndbox"],
+          "answer": "class_id cx cy w h, все координаты normalized",
+          "hint": "YOLO часто хранит один `.txt` рядом с картинкой.",
+          "explain": "YOLO format удобен для YOLO-моделей, но для DETR/COCO обычно нужен другой target format.",
+          "terms": ["bbox", "yolo"]
+        },
+        {
+          "id": "det-voc-format-choice",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "Pascal VOC",
+          "prompt": "Как обычно устроена Pascal VOC разметка?",
+          "options": ["XML на изображение: size, object/name, bndbox", "Один parquet с logits", "Один txt на класс", "Только mask PNG без классов"],
+          "answer": "XML на изображение: size, object/name, bndbox",
+          "hint": "VOC старше COCO и часто хранится как XML-файлы.",
+          "explain": "В VOC каждый объект описан тегами `name` и `bndbox` с xmin/ymin/xmax/ymax.",
+          "terms": ["bbox", "voc"]
+        },
+        {
+          "id": "det-dedupe-relation-objects",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Deduplicate objects",
+          "prompt": "Из relation DataFrame собери таблицу уникальных объектов: subject и object колонки объединить, дубли одинакового image_id+label+box убрать.",
+          "starter": "def relation_rows_to_objects(df):",
+          "answer": "def relation_rows_to_objects(df):\n    subj = df[['image_id', 'subject_label', 'subject_x1', 'subject_y1', 'subject_x2', 'subject_y2']].copy()\n    subj.columns = ['image_id', 'label', 'x1', 'y1', 'x2', 'y2']\n    obj = df[['image_id', 'object_label', 'object_x1', 'object_y1', 'object_x2', 'object_y2']].copy()\n    obj.columns = ['image_id', 'label', 'x1', 'y1', 'x2', 'y2']\n    objects = pd.concat([subj, obj], ignore_index=True)\n    objects = objects.drop_duplicates(['image_id', 'label', 'x1', 'y1', 'x2', 'y2']).reset_index(drop=True)\n    objects['object_id'] = np.arange(len(objects))\n    return objects",
+          "testsText": "Проверяется, что один person из нескольких predicates остается одним detection target.",
+          "hint": "Detection учит физические объекты, а не строки отношений.",
+          "explain": "Если person участвует в двух отношениях, в detection target он должен быть один раз. Predicate labels хранятся отдельной relation table.",
+          "terms": ["bbox", "visual_relationship"]
+        },
+        {
+          "id": "det-coco-annotation-dict",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "COCO annotation dict",
+          "prompt": "Напиши COCO annotation dict из строки объекта `row` с x1/y1/x2/y2 и `category_id`.",
+          "starter": "def make_coco_annotation(row, ann_id):",
+          "answer": "def make_coco_annotation(row, ann_id):\n    w = row['x2'] - row['x1']\n    h = row['y2'] - row['y1']\n    return {\n        'id': ann_id,\n        'image_id': int(row['image_id']),\n        'category_id': int(row['category_id']),\n        'bbox': [float(row['x1']), float(row['y1']), float(w), float(h)],\n        'area': float(w * h),\n        'iscrowd': 0,\n    }",
+          "testsText": "Проверяется bbox xywh, area и обязательные COCO-поля.",
+          "hint": "`id` у annotation отдельный, это не `image_id`.",
+          "explain": "COCO-style JSON обычно содержит `images`, `annotations`, `categories`; annotation связывает image и category через id.",
+          "terms": ["coco", "bbox"]
+        },
+        {
+          "id": "det-collate-variable-targets",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Detection collate_fn",
+          "prompt": "Напиши `collate_fn` для detection DataLoader: изображения stack, targets оставить списком dict, потому что объектов разное число.",
+          "starter": "def detection_collate(batch):",
+          "answer": "def detection_collate(batch):\n    images, targets = zip(*batch)\n    images = torch.stack(list(images), dim=0)\n    return images, list(targets)",
+          "testsText": "Проверяется, что targets не превращаются в один tensor.",
+          "hint": "На разных картинках может быть 1, 5 или 30 объектов.",
+          "explain": "Обычный collate пытается stack-нуть все поля, но detection target переменной длины, поэтому targets часто оставляют list[dict].",
+          "terms": ["dataloader", "detection"]
+        }
+      ]
+    },
+    {
+      "id": "detr-target-prep",
+      "title": "DETR: targets и обучение",
+      "track": "DETR / Box Loss / Matching",
+      "tag": "cv",
+      "icon": "DT",
+      "color": "#8ea4c7",
+      "copy": "Что именно подать в DETR: class ids, normalized center boxes, per-image targets, no-object queries и sanity checks.",
+      "rules": [
+        "DETR target обычно list[dict], один dict на image",
+        "Boxes для loss чаще [cx, cy, w, h] normalized",
+        "Object queries матчатся с target objects через Hungarian matching"
+      ],
+      "lessons": [
+        {
+          "id": "detr-target-structure-choice",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "Target на image",
+          "prompt": "Как обычно выглядит target для одного изображения в DETR-style обучении?",
+          "options": ["dict с class_labels и boxes для всех объектов image", "один class_id на всю картинку", "одна строка predicate без box", "только image_id"],
+          "answer": "dict с class_labels и boxes для всех объектов image",
+          "hint": "DETR предсказывает набор объектов, а не один label.",
+          "explain": "Для batch обычно получается `targets = [{'class_labels': ..., 'boxes': ...}, ...]`, где длина boxes разная на разных изображениях.",
+          "terms": ["detr", "target"]
+        },
+        {
+          "id": "detr-label-map-sorted",
+          "kind": "write",
+          "difficulty": 2,
+          "title": "Label map",
+          "prompt": "Построй стабильный mapping object label -> class_id по всем subject/object labels.",
+          "starter": "def build_object_label_map(df):",
+          "answer": "def build_object_label_map(df):\n    labels = pd.concat([df['subject_label'], df['object_label']], ignore_index=True)\n    classes = sorted(labels.unique())\n    return {label: idx for idx, label in enumerate(classes)}",
+          "testsText": "Проверяется sorted порядок и объединение subject/object labels.",
+          "hint": "Один общий детектор должен знать все object classes.",
+          "explain": "Если subject и object labels маппить отдельно, `person=0` и `bicycle=0` могут случайно стать одним классом.",
+          "terms": ["class_label", "detection"]
+        },
+        {
+          "id": "detr-target-from-objects",
+          "kind": "write",
+          "difficulty": 5,
+          "title": "Objects -> DETR target",
+          "prompt": "Для одного `image_id` собери DETR target из objects DataFrame: `class_labels` long и `boxes` float normalized cxcywh.",
+          "starter": "def make_detr_target(objects, image_id, label_to_id, img_w, img_h):",
+          "answer": "def make_detr_target(objects, image_id, label_to_id, img_w, img_h):\n    rows = objects[objects['image_id'] == image_id]\n    labels = [label_to_id[label] for label in rows['label']]\n    boxes = []\n    for _, row in rows.iterrows():\n        box = [row['x1'], row['y1'], row['x2'], row['y2']]\n        boxes.append(xyxy_to_cxcywh_norm(box, img_w, img_h))\n    return {\n        'class_labels': torch.as_tensor(labels, dtype=torch.long),\n        'boxes': torch.as_tensor(boxes, dtype=torch.float32),\n    }",
+          "testsText": "Проверяется фильтр по image_id, dtype labels/boxes и normalized center format.",
+          "hint": "Сначала получи уникальные objects, не relation rows.",
+          "explain": "Это место, где relation CSV превращается в обычный detection target для DETR.",
+          "terms": ["detr", "bbox", "target"]
+        },
+        {
+          "id": "detr-box-format-bug",
+          "kind": "bug",
+          "difficulty": 4,
+          "title": "Wrong box format",
+          "prompt": "Какая строка делает target boxes неправильными для DETR loss?",
+          "lines": [
+            "labels = torch.as_tensor(class_ids, dtype=torch.long)",
+            "boxes = torch.as_tensor(xyxy_boxes, dtype=torch.float32)",
+            "target = {'class_labels': labels, 'boxes': boxes}",
+            "outputs = model(pixel_values=pixel_values, labels=[target])"
+          ],
+          "answer": 1,
+          "hint": "Сырые xyxy в пикселях не равны normalized cxcywh.",
+          "explain": "DETR-style losses обычно ждут boxes в center format normalized 0..1. Абсолютные xyxy сломают масштаб loss и matching.",
+          "terms": ["detr", "bbox"]
+        },
+        {
+          "id": "detr-no-object-queries",
+          "kind": "choice",
+          "difficulty": 2,
+          "title": "No object",
+          "prompt": "Почему у DETR обычно больше object queries, чем объектов на картинке?",
+          "options": ["лишние queries учатся предсказывать no-object", "каждый query соответствует одному пикселю", "queries равны числу классов", "это нужно только для segmentation masks"],
+          "answer": "лишние queries учатся предсказывать no-object",
+          "hint": "DETR предсказывает фиксированное число slots.",
+          "explain": "Если на image 7 объектов, а queries 100, Hungarian matching сопоставит 7 queries с объектами, остальные уйдут в no-object class.",
+          "terms": ["detr", "matching"]
+        },
+        {
+          "id": "detr-visual-sanity-order",
+          "kind": "order",
+          "difficulty": 3,
+          "title": "Box sanity",
+          "prompt": "Собери порядок sanity-check перед обучением DETR.",
+          "blocks": [
+            "img, target = dataset[0]",
+            "boxes = target['boxes']",
+            "boxes_xyxy = cxcywh_norm_to_xyxy(boxes, img_w, img_h)",
+            "draw_boxes(img, boxes_xyxy, target['class_labels'])"
+          ],
+          "answer": [
+            "img, target = dataset[0]",
+            "boxes = target['boxes']",
+            "boxes_xyxy = cxcywh_norm_to_xyxy(boxes, img_w, img_h)",
+            "draw_boxes(img, boxes_xyxy, target['class_labels'])"
+          ],
+          "hint": "Визуализацию делай в пиксельных xyxy, даже если model target normalized cxcywh.",
+          "explain": "Если на первой картинке боксы съехали, дальше тюнить модель бессмысленно.",
+          "terms": ["bbox", "visualization"]
+        },
+        {
+          "id": "detr-loss-components-choice",
+          "kind": "choice",
+          "difficulty": 2,
+          "title": "DETR losses",
+          "prompt": "Какие loss-компоненты обычно есть в DETR для object detection?",
+          "options": ["classification + bbox L1 + GIoU", "только MSE по image pixels", "только CatBoost logloss", "только Dice по masks"],
+          "answer": "classification + bbox L1 + GIoU",
+          "hint": "Нужно учить и класс, и координаты box.",
+          "explain": "Classification отвечает за label/no-object, L1 и GIoU отвечают за геометрию предсказанного bbox.",
+          "terms": ["loss", "detr", "iou"]
+        },
+        {
+          "id": "detr-small-data-freeze-idea",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "DETR на маленьком датасете",
+          "prompt": "Опиши план fine-tuning DETR на небольшом detection датасете за 6 часов.",
+          "context": "Дано: картинки, object boxes/classes, pretrained DETR уже выдан в соревновании. Нужно быстро получить detection baseline и не убить модель.",
+          "rubric": [
+            {"label": "format sanity", "keywords": ["bbox", "format", "visual", "визуал", "cxcywh"]},
+            {"label": "validation", "keywords": ["validation", "valid", "map", "iou"]},
+            {"label": "small lr", "keywords": ["lr", "learning rate", "мал", "низк"]},
+            {"label": "freeze/backbone", "keywords": ["freeze", "замороз", "backbone"]},
+            {"label": "early submit", "keywords": ["submit", "baseline", "сабмит"]}
+          ],
+          "minRubric": 4,
+          "minWords": 50,
+          "hint": "Сначала докажи, что target boxes верные, потом уже меняй lr/epochs.",
+          "explain": "В detection чаще всего ломается формат координат и matching, а не сама идея модели.",
+          "reference": "Хороший план: визуально проверить targets, сделать train/valid split, обучать с маленьким lr, возможно заморозить backbone на первых эпохах, следить за validation mAP/IoU и быстро отправить рабочий baseline до рискованных экспериментов.",
+          "terms": ["detr", "validation"]
+        }
+      ]
+    },
+    {
+      "id": "predicate-catboost-pipeline",
+      "title": "Predicates: CatBoost",
+      "track": "Relations / Pair Features",
+      "tag": "recsys",
+      "icon": "PR",
+      "color": "#dec27d",
+      "copy": "Как отделить predicate classifier от detection: relation table, pair features, negatives, CatBoost и сборка итоговых triples.",
+      "rules": [
+        "Predicate classifier получает пару subject-object, а не одиночный bbox",
+        "GT relations лучше хранить отдельно от detection objects",
+        "На инференсе predicates считаются по парам predicted boxes"
+      ],
+      "lessons": [
+        {
+          "id": "rel-detection-vs-predicate-choice",
+          "kind": "choice",
+          "difficulty": 1,
+          "title": "Две задачи",
+          "prompt": "Что должен учить DETR, если predicate потом обучается отдельным CatBoost?",
+          "options": ["object boxes и object labels", "predicate без координат", "только interaction score", "только image_id"],
+          "answer": "object boxes и object labels",
+          "hint": "DETR здесь обычный детектор объектов.",
+          "explain": "Predicate `person riding bicycle` появляется после детекции: CatBoost классифицирует пару subject-object.",
+          "terms": ["detection", "visual_relationship"]
+        },
+        {
+          "id": "rel-build-relation-table",
+          "kind": "write",
+          "difficulty": 4,
+          "title": "Relation table with ids",
+          "prompt": "Имея `objects` с object_id и исходный df, добавь к relation rows `subject_id` и `object_id` через merge по image_id+label+box.",
+          "starter": "def attach_object_ids(df, objects):",
+          "answer": "def attach_object_ids(df, objects):\n    key_cols = ['image_id', 'label', 'x1', 'y1', 'x2', 'y2']\n    subj = objects[key_cols + ['object_id']].rename(columns={\n        'label': 'subject_label', 'x1': 'subject_x1', 'y1': 'subject_y1', 'x2': 'subject_x2', 'y2': 'subject_y2', 'object_id': 'subject_id'\n    })\n    obj = objects[key_cols + ['object_id']].rename(columns={\n        'label': 'object_label', 'x1': 'object_x1', 'y1': 'object_y1', 'x2': 'object_x2', 'y2': 'object_y2', 'object_id': 'object_id'\n    })\n    out = df.merge(subj, on=['image_id', 'subject_label', 'subject_x1', 'subject_y1', 'subject_x2', 'subject_y2'])\n    out = out.merge(obj, on=['image_id', 'object_label', 'object_x1', 'object_y1', 'object_x2', 'object_y2'])\n    return out",
+          "testsText": "Проверяется, что subject_id и object_id соответствуют уникальным объектам.",
+          "hint": "Связь relation -> object лучше делать через id, а не каждый раз через координаты.",
+          "explain": "Так ты разделяешь detection objects и relation labels, но можешь собрать их обратно для predicate training.",
+          "terms": ["visual_relationship", "pandas"]
+        },
+        {
+          "id": "rel-geometry-features",
+          "kind": "write",
+          "difficulty": 5,
+          "title": "Geometry features",
+          "prompt": "Напиши признаки геометрии пары: centers delta, area ratio и IoU для subject/object boxes.",
+          "starter": "def add_pair_geometry_features(df):",
+          "answer": "def add_pair_geometry_features(df):\n    sx = (df['subject_x1'] + df['subject_x2']) / 2\n    sy = (df['subject_y1'] + df['subject_y2']) / 2\n    ox = (df['object_x1'] + df['object_x2']) / 2\n    oy = (df['object_y1'] + df['object_y2']) / 2\n    sw = (df['subject_x2'] - df['subject_x1']).clip(lower=1)\n    sh = (df['subject_y2'] - df['subject_y1']).clip(lower=1)\n    ow = (df['object_x2'] - df['object_x1']).clip(lower=1)\n    oh = (df['object_y2'] - df['object_y1']).clip(lower=1)\n    out = df.copy()\n    out['dx'] = (ox - sx) / sw\n    out['dy'] = (oy - sy) / sh\n    out['area_ratio'] = (ow * oh) / (sw * sh)\n    ix1 = np.maximum(df['subject_x1'], df['object_x1'])\n    iy1 = np.maximum(df['subject_y1'], df['object_y1'])\n    ix2 = np.minimum(df['subject_x2'], df['object_x2'])\n    iy2 = np.minimum(df['subject_y2'], df['object_y2'])\n    inter = np.maximum(0, ix2 - ix1) * np.maximum(0, iy2 - iy1)\n    union = sw * sh + ow * oh - inter\n    out['box_iou'] = inter / union.clip(lower=1e-6)\n    return out",
+          "testsText": "Проверяется center delta, area_ratio и IoU без деления на ноль.",
+          "hint": "Для predicate часто важнее взаимное положение boxes, чем сами пиксели.",
+          "explain": "`person on motorcycle` и `person next to motorcycle` часто различаются геометрией: overlap, relative center, relative area.",
+          "terms": ["bbox", "feature_engineering"]
+        },
+        {
+          "id": "rel-catboost-categorical-pool",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "CatBoost predicate Pool",
+          "prompt": "Создай CatBoost Pool для predicate classifier с categorical subject/object labels.",
+          "starter": "from catboost import Pool",
+          "answer": "from catboost import Pool\n\ncat_cols = ['subject_label', 'object_label']\ntrain_pool = Pool(train_df[features], train_df['predicate'], cat_features=cat_cols)\nvalid_pool = Pool(valid_df[features], valid_df['predicate'], cat_features=cat_cols)",
+          "testsText": "Проверяется Pool и cat_features.",
+          "hint": "Labels объектов лучше дать CatBoost как категории.",
+          "explain": "CatBoost умеет работать со строковыми категориями: `person + bicycle` уже сильная подсказка для predicate.",
+          "terms": ["catboost", "predicate"]
+        },
+        {
+          "id": "rel-negative-none-pairs",
+          "kind": "write",
+          "difficulty": 5,
+          "title": "Negative none pairs",
+          "prompt": "Для image objects создай все ordered пары разных объектов и разметь predicate из known_relations, иначе `none`.",
+          "starter": "def make_relation_candidates(objects, known_relations):",
+          "answer": "def make_relation_candidates(objects, known_relations):\n    rel_map = known_relations.set_index(['image_id', 'subject_id', 'object_id'])['predicate'].to_dict()\n    rows = []\n    for image_id, group in objects.groupby('image_id'):\n        ids = group['object_id'].tolist()\n        for subject_id in ids:\n            for object_id in ids:\n                if subject_id == object_id:\n                    continue\n                predicate = rel_map.get((image_id, subject_id, object_id), 'none')\n                rows.append({'image_id': image_id, 'subject_id': subject_id, 'object_id': object_id, 'predicate': predicate})\n    return pd.DataFrame(rows)",
+          "testsText": "Проверяется ordered pairs, исключение self-pair и класс none.",
+          "hint": "Predicate classifier должен видеть не только положительные relations.",
+          "explain": "На инференсе ты будешь перебирать много пар detected objects, поэтому модель должна уметь говорить `none`.",
+          "terms": ["predicate", "negative_sampling"]
+        },
+        {
+          "id": "rel-inference-pipeline-order",
+          "kind": "order",
+          "difficulty": 3,
+          "title": "Inference triples",
+          "prompt": "Собери inference pipeline для финальных subject-predicate-object triples.",
+          "blocks": [
+            "detections = detr_predict(image)",
+            "pairs = build_subject_object_pairs(detections)",
+            "features = make_pair_features(pairs)",
+            "predicate_prob = catboost.predict_proba(features)",
+            "triples = filter_and_rank_triples(pairs, predicate_prob)"
+          ],
+          "answer": [
+            "detections = detr_predict(image)",
+            "pairs = build_subject_object_pairs(detections)",
+            "features = make_pair_features(pairs)",
+            "predicate_prob = catboost.predict_proba(features)",
+            "triples = filter_and_rank_triples(pairs, predicate_prob)"
+          ],
+          "hint": "Сначала нужны boxes/classes, потом пары, потом predicate.",
+          "explain": "Это двухстадийная архитектура: detection model генерит объекты, табличная модель сортирует отношения между ними.",
+          "terms": ["pipeline", "predicate"]
+        },
+        {
+          "id": "rel-score-combination",
+          "kind": "write",
+          "difficulty": 3,
+          "title": "Triple score",
+          "prompt": "Напиши score для relation triple как произведение subject score, object score и predicate probability.",
+          "starter": "def triple_score(subject_score, object_score, predicate_prob):",
+          "answer": "def triple_score(subject_score, object_score, predicate_prob):\n    return subject_score * object_score * predicate_prob",
+          "testsText": "Проверяется, что низкая уверенность любого компонента снижает итоговый score.",
+          "hint": "Это простой baseline для ранжирования triples.",
+          "explain": "Если object detector не уверен в box или CatBoost не уверен в predicate, triple должен получить меньший score.",
+          "terms": ["ranking", "predicate"]
+        },
+        {
+          "id": "rel-two-stage-idea",
+          "kind": "idea",
+          "difficulty": 4,
+          "title": "План DETR + CatBoost",
+          "prompt": "Опиши свой план обучения: DETR для объектов и CatBoost для predicate на relation CSV.",
+          "context": "Дано: image_id, subject box/label, object box/label, predicate. Нужно получить модель, которая предсказывает те же triples на test.",
+          "rubric": [
+            {"label": "dedupe objects", "keywords": ["dedupe", "unique", "объект", "дублик"]},
+            {"label": "DETR targets", "keywords": ["detr", "box", "cxcywh", "class"]},
+            {"label": "predicate features", "keywords": ["catboost", "feature", "geometry", "label"]},
+            {"label": "negatives/none", "keywords": ["negative", "none", "негатив", "пары"]},
+            {"label": "validation", "keywords": ["validation", "valid", "split", "metric"]}
+          ],
+          "minRubric": 4,
+          "minWords": 60,
+          "hint": "Не смешивай object detection labels и predicate labels в одну COCO annotation.",
+          "explain": "Это ровно та mental model, которая нужна для твоей задачи: объекты отдельно, отношения отдельно.",
+          "reference": "Хороший план: из relation rows собрать уникальные objects, подготовить DETR targets с class_labels и normalized boxes, обучить/затюнить DETR, затем собрать relation candidates, добавить subject/object labels и geometry features, обучить CatBoost на predicates с negative/none pairs, валидировать весь pipeline end-to-end.",
+          "terms": ["detr", "catboost", "visual_relationship"]
+        }
+      ]
+    }
+  ]
+}

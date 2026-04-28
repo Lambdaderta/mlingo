@@ -4,7 +4,7 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.7";
+const APP_VERSION = "0.1.8";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -12,6 +12,7 @@ const DEFAULT_PACK_URLS = [
   "./lesson-packs/recsys-rerank-pack.json",
   "./lesson-packs/dl-advanced-pack.json",
   "./lesson-packs/contest-expansion-pack.json",
+  "./lesson-packs/detection-vrd-pack.json",
 ];
 const DEFAULT_PACK_INDEX_URL = "https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json";
 const API_BASE = window.MLINGO_API_BASE || "";

@@ -1,4 +1,4 @@
-const CACHE_NAME = "mlingo-clean-v18";
+const CACHE_NAME = "mlingo-clean-v19";
 const ASSETS = [
   "./",
   "./index.html",
@@ -10,6 +10,7 @@ const ASSETS = [
   "./lesson-packs/recsys-rerank-pack.json",
   "./lesson-packs/dl-advanced-pack.json",
   "./lesson-packs/contest-expansion-pack.json",
+  "./lesson-packs/detection-vrd-pack.json",
   "./manifest.webmanifest",
   "./icon.svg",
   "./assets/brand/mlingo-cat-logo-512.png",

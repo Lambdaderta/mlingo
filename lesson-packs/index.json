@@ -27,6 +27,11 @@
         "id": "contest-expansion-pack-v1",
         "title": "Contest Expansion Pack",
         "url": "./contest-expansion-pack.json"
+      },
+      {
+        "id": "detection-vrd-pack-v1",
+        "title": "Detection and Visual Relations Pack",
+        "url": "./detection-vrd-pack.json"
       }
     ]
   }

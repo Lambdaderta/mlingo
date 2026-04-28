@@ -71,6 +71,7 @@ Bundled-паки лежат в [lesson-packs](lesson-packs):
 - `recsys-rerank-pack.json` — candidate generation, reranking, ranking metrics и leakage-safe validation.
 - `dl-advanced-pack.json` — transformers, diffusion, RL basics и training tricks.
 - `contest-expansion-pack.json` — дополнительные contest-задачи по CV, recsys и deep learning.
+- `detection-vrd-pack.json` — object detection formats, DETR targets и predicate classifier для visual relations.
 
 Индекс паков хранится в [lesson-packs/index.json](lesson-packs/index.json). Формат описан в [docs/lesson-packs.md](docs/lesson-packs.md).
 
