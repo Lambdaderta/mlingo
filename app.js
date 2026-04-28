@@ -560,7 +560,6 @@ function bindEvents() {
   els.reportLessonButton?.addEventListener("click", () => openIssueReport({ lesson: getCurrentLesson(), topic: getCurrentTopic() }));
   els.reportAppButton?.addEventListener("click", () => openIssueReport({}));
   els.resetButton.addEventListener("click", renderLesson);
-  els.roadmapPath?.addEventListener("click", handleRoadmapClick);
   els.prevButton?.addEventListener("click", previousLesson);
   els.checkButton.addEventListener("click", checkAnswer);
   els.nextButton.addEventListener("click", nextLesson);
@@ -816,35 +815,31 @@ function renderRoadmap() {
         ${
           isLocked
             ? `<span class="road-start-button is-disabled">Закрыто</span>`
-            : `<a class="road-start-button" href="${escapeHtml(buildLessonHref(topic.id, index))}" data-road-start="true">Пройти</a>`
+            : `<button class="road-start-button" type="button" data-road-start="true">Пройти</button>`
         }
       </span>
     `;
+    node.addEventListener("click", () => {
+      if (isLocked) return;
+      selectRoadmapLesson(topic.id, index);
+    });
+    node.querySelector("[data-road-start]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectRoadmapLesson(topic.id, index, { render: false });
+      navigateToScreen("lesson");
+    });
     els.roadmapPath.appendChild(node);
   });
 }
 
-function buildLessonHref(topicId, lessonIndex) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("screen", "lesson");
-  url.searchParams.set("topic", topicId);
-  url.searchParams.set("lesson", String(lessonIndex));
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-function handleRoadmapClick(event) {
-  const node = event.target.closest("[data-road-topic][data-road-index]");
-  if (!node || node.getAttribute("aria-disabled") === "true" || node.disabled) return;
-  if (event.target.closest("[data-road-start]")) {
-    event.preventDefault();
-    openLessonAt(node.dataset.roadTopic, Number(node.dataset.roadIndex));
-    return;
-  }
-  currentTopicId = node.dataset.roadTopic;
-  currentLessonIndex = Number(node.dataset.roadIndex);
+function selectRoadmapLesson(topicId, lessonIndex, { render = true } = {}) {
+  currentTopicId = topicId;
+  currentLessonIndex = Number(lessonIndex);
   state.currentTopicId = currentTopicId;
   state.currentLessonIndex = currentLessonIndex;
   saveState();
+  if (!render) return;
   renderRoadmap();
   renderSidebar();
 }
