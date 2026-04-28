@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean30" />
-    <script defer src="./app.js?v=clean30"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean31" />
+    <script defer src="./app.js?v=clean31"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -393,23 +393,24 @@
             </div>
             <button class="ghost-button icon-button" id="guideCloseButton" type="button" aria-label="Закрыть">×</button>
           </div>
-          <p class="prompt">Основные экраны приложения.</p>
+          <p class="prompt">Коротко: выбери тему, выбери урок на карте и нажми «Пройти» на карточке. Если урок уже выделен, можно открыть его кнопкой «Урок» слева.</p>
 
           <div class="guide-grid" aria-label="Приветственный гайд">
             <article class="guide-card">
               <div class="guide-shot guide-shot-roadmap" aria-hidden="true">
                 <div class="shot-sidebar">
-                  <span></span><span></span><span></span>
+                  <span></span><span class="shot-side-lesson"></span><span></span>
                 </div>
                 <div class="shot-main">
                   <div class="shot-title"></div>
                   <div class="shot-path">
-                    <i></i><i></i><i></i><i></i>
+                    <i></i><i class="is-selected"></i><i></i>
                   </div>
+                  <div class="shot-start-button">Пройти</div>
                 </div>
               </div>
-              <h3>1. Карта</h3>
-              <p>Темы, фильтры и узлы сложности.</p>
+              <h3>1. Открой урок</h3>
+              <p>На карте нажми «Пройти». Просто клик по карточке только выбирает урок; кнопка «Урок» слева открывает выбранный.</p>
             </article>
 
             <article class="guide-card">
@@ -418,7 +419,7 @@
                 <div class="shot-controls"><i></i><i></i><i></i></div>
                 <div class="shot-feedback"></div>
               </div>
-              <h3>2. Урок</h3>
+              <h3>2. Решай</h3>
               <p>Блоки, ввод кода, подсказки и проверка.</p>
             </article>
 

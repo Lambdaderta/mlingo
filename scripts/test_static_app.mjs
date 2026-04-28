@@ -49,6 +49,7 @@ assert.ok(!html.includes('placeholder="Lambdaderta"'), "GitHub owner field shoul
 assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include update checker button");
 assert.ok(html.includes('id="guideModal"'), "index.html should include welcome guide modal");
 assert.ok(html.includes('id="guideButton"'), "index.html should include guide reopen button");
+assert.ok(html.includes("Пройти"), "welcome guide should explain the roadmap start button");
 assert.ok(html.includes('id="reportLessonButton"'), "index.html should include lesson issue report button");
 assert.ok(html.includes('id="reportAppButton"'), "index.html should include global issue report button");
 assert.ok(html.includes('id="screen-review"'), "index.html should include review/discussion screen");
@@ -109,6 +110,7 @@ assert.ok(app.includes("function openCurrentLesson"), "lesson nav should explici
 assert.ok(app.includes("function openLessonAt"), "roadmap lesson nodes should explicitly open selected lessons");
 assert.ok(app.includes("function buildLessonHref"), "roadmap lesson nodes should have native lesson links");
 assert.ok(app.includes("function handleRoadmapClick"), "roadmap should delegate lesson card clicks");
+assert.ok(app.includes("data-road-start"), "roadmap should render an explicit start button for lessons");
 assert.ok(app.includes("applyInitialRoute()"), "app should honor lesson links on initial load");
 assert.ok(app.includes("const GUIDE_SEEN_KEY"), "app should remember whether welcome guide was seen");
 assert.ok(app.includes("function maybeOpenGuide"), "app should open the welcome guide on first run");

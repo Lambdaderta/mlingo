@@ -661,7 +661,7 @@ body[data-screen="topics"] .workspace {
 
 .road-node {
   display: grid;
-  grid-template-columns: 3.35rem minmax(0, 1fr);
+  grid-template-columns: 3.35rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.9rem;
   width: 100%;
@@ -672,6 +672,7 @@ body[data-screen="topics"] .workspace {
   padding: 1rem;
   text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .road-node.is-current {
@@ -687,6 +688,42 @@ body[data-screen="topics"] .workspace {
 .road-node.is-locked {
   opacity: 0.48;
   cursor: not-allowed;
+}
+
+.road-node-copy {
+  min-width: 0;
+}
+
+.road-node-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.road-start-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  border: 1px solid rgba(199, 167, 106, 0.52);
+  border-radius: 999px;
+  background: rgba(199, 167, 106, 0.16);
+  color: var(--gold);
+  font-weight: 950;
+  padding: 0.45rem 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.road-start-button:hover {
+  border-color: rgba(237, 213, 146, 0.72);
+  background: rgba(199, 167, 106, 0.23);
+  color: var(--ink);
+}
+
+.road-start-button.is-disabled {
+  border-color: rgba(218, 226, 240, 0.16);
+  background: rgba(218, 226, 240, 0.06);
+  color: var(--muted);
 }
 
 .road-node-icon {
@@ -2052,6 +2089,13 @@ body.auth-required .mobile-tabs {
   height: 1.35rem;
 }
 
+.shot-sidebar .shot-side-lesson,
+.shot-path i.is-selected {
+  border: 1px solid rgba(199, 167, 106, 0.62);
+  background: rgba(199, 167, 106, 0.22);
+  box-shadow: 0 0 0 3px rgba(199, 167, 106, 0.12);
+}
+
 .shot-title {
   width: 70%;
   height: 1.2rem;
@@ -2070,6 +2114,19 @@ body.auth-required .mobile-tabs {
   border: 1px solid rgba(199, 167, 106, 0.5);
   border-radius: 50%;
   background: rgba(199, 167, 106, 0.14);
+}
+
+.shot-start-button {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.8rem;
+  border: 1px solid rgba(237, 213, 146, 0.68);
+  border-radius: 999px;
+  background: rgba(199, 167, 106, 0.2);
+  color: var(--gold);
+  font-weight: 950;
+  padding: 0.28rem 0.7rem;
+  box-shadow: 0 0 0 3px rgba(199, 167, 106, 0.12);
 }
 
 .guide-shot-lesson {
@@ -2388,6 +2445,11 @@ body.focus-mode .screen-stack {
   .road-node {
     grid-template-columns: 3rem minmax(0, 1fr);
     padding: 0.9rem;
+  }
+
+  .road-node-actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 
   .brief-row {

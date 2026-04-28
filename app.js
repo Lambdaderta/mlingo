@@ -798,23 +798,26 @@ function renderRoadmap() {
     const isDone = Boolean(state.completed[lesson.id]);
     const isCurrent = index === currentLessonIndex;
     const isLocked = (lesson.difficulty || 1) > level;
-    const node = document.createElement(isLocked ? "button" : "a");
+    const node = document.createElement("div");
     node.className = `road-node${isDone ? " is-done" : ""}${isCurrent ? " is-current" : ""}${isLocked ? " is-locked" : ""}`;
     node.dataset.roadTopic = topic.id;
     node.dataset.roadIndex = String(index);
     if (isLocked) {
-      node.type = "button";
-      node.disabled = true;
       node.setAttribute("aria-disabled", "true");
-    } else {
-      node.href = buildLessonHref(topic.id, index);
     }
     node.style.setProperty("--node-color", topic.color);
     node.innerHTML = `
       <span class="road-node-icon">${isLocked ? "L" : isDone ? "✓" : index + 1}</span>
-      <span>
+      <span class="road-node-copy">
         <strong>${lesson.title}</strong>
         <small>${lessonLabels[lesson.kind]} · сложность ${lesson.difficulty || 1}/5${isLocked ? " · откроется позже" : ""}</small>
+      </span>
+      <span class="road-node-actions">
+        ${
+          isLocked
+            ? `<span class="road-start-button is-disabled">Закрыто</span>`
+            : `<a class="road-start-button" href="${escapeHtml(buildLessonHref(topic.id, index))}" data-road-start="true">Пройти</a>`
+        }
       </span>
     `;
     els.roadmapPath.appendChild(node);
@@ -832,8 +835,18 @@ function buildLessonHref(topicId, lessonIndex) {
 function handleRoadmapClick(event) {
   const node = event.target.closest("[data-road-topic][data-road-index]");
   if (!node || node.getAttribute("aria-disabled") === "true" || node.disabled) return;
-  event.preventDefault();
-  openLessonAt(node.dataset.roadTopic, Number(node.dataset.roadIndex));
+  if (event.target.closest("[data-road-start]")) {
+    event.preventDefault();
+    openLessonAt(node.dataset.roadTopic, Number(node.dataset.roadIndex));
+    return;
+  }
+  currentTopicId = node.dataset.roadTopic;
+  currentLessonIndex = Number(node.dataset.roadIndex);
+  state.currentTopicId = currentTopicId;
+  state.currentLessonIndex = currentLessonIndex;
+  saveState();
+  renderRoadmap();
+  renderSidebar();
 }
 
 function renderLesson() {
