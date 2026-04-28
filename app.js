@@ -5,7 +5,7 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "0.1.10";
+const APP_VERSION = "0.1.11";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -3162,77 +3162,166 @@ const libraryCards = [
   { title: "Ranker groups", text: "LGBM/CatBoost ranker получает group/query: обычно все candidate rows одного user." },
 ];
 
-const theoryCards = [
+const theoryChapters = [
   {
-    title: "Детекция: как читать датасет",
-    kicker: "bbox, class, image_id",
-    diagram: "detection",
-    body:
-      "В object detection строка аннотации описывает объект: его bbox и class. Если в одной строке лежат subject, object и predicate, это уже relation row: для DETR из неё обычно достают два объекта, а predicate обучают отдельной моделью по паре.",
-    bullets: [
-      "bbox часто бывает `xyxy`, COCO ждёт `xywh`.",
-      "В одном изображении много объектов, поэтому target хранит списки boxes и labels.",
-      "Дубликаты bbox из relation-строк нужно убирать, иначе модель увидит один объект несколько раз.",
+    id: "start",
+    level: "0. Старт",
+    title: "Как не тонуть в ML-коде",
+    subtitle: "Перед моделью всегда проверь форму данных, dtype и честную валидацию. Это скучно, но именно здесь чаще всего лежат быстрые баллы.",
+    diagram: "start",
+    cards: [
+      {
+        title: "Shapes и dtype сначала",
+        body: "Смотри на тензор до forward. Если размерность или dtype не те, модель может обучаться мусором и не упасть с ошибкой.",
+        bullets: ["Images в torch обычно `[B,C,H,W]`.", "Targets для CE — `long`, для BCE — `float`.", "Любой reshape проверяй через assert."],
+        code:
+          "x = torch.randn(8, 3, 224, 224)\ny = torch.randint(0, 2, (8, 1, 224, 224)).float()\n\nassert x.ndim == 4 and x.shape[1] == 3\nassert y.dtype == torch.float32\nassert x.device == y.device",
+      },
+      {
+        title: "Валидация до идей",
+        body: "Если validation нет, ты не знаешь, улучшил решение или просто угадал public leaderboard. Сначала делай маленький split, потом уже усложняй.",
+        bullets: ["Classification: stratified split.", "Time/recsys: split по времени.", "Leakage-фичи считай только внутри train fold."],
+        code:
+          "from sklearn.model_selection import StratifiedKFold\n\nskf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\nfor fold, (tr_idx, va_idx) in enumerate(skf.split(df, df['target'])):\n    train_df = df.iloc[tr_idx].copy()\n    val_df = df.iloc[va_idx].copy()\n    break",
+      },
     ],
   },
   {
-    title: "DETR: что именно тюнить",
-    kicker: "queries + matching",
-    diagram: "detr",
-    body:
-      "DETR не предсказывает anchor boxes как YOLO. Он держит фиксированное число object queries, а Hungarian matching решает, какая query отвечает за какой target object. Остальные queries становятся no-object.",
-    bullets: [
-      "В Dataset возвращай `boxes` в нормализованном `cxcywh` или формате, который ждёт конкретная реализация.",
-      "Fine-tune обычно начинается с головы классов и bbox-head, потом можно разморозить последние слои.",
-      "Следи за `num_classes`: no-object часто добавляется внутри модели отдельно.",
-    ],
-  },
-  {
-    title: "Сегментация: logits → mask",
-    kicker: "BCE/Dice/IoU",
+    id: "torch",
+    level: "1. PyTorch",
+    title: "Dataset, loader, training loop",
+    subtitle: "Это база для любой CV/DL задачи. Сначала сделай минимальный pipeline, который честно overfit-ится на маленьком batch.",
     diagram: "segmentation",
-    body:
-      "Binary segmentation почти всегда выглядит как `logits [B,1,H,W]`, `target [B,1,H,W]`. Loss считает logits напрямую, а sigmoid и threshold нужны для метрик и сабмита.",
-    bullets: [
-      "`BCEWithLogitsLoss` уже содержит sigmoid внутри.",
-      "Dice помогает, когда фон огромный и модель ленится предсказывать объект.",
-      "Threshold, largest component и resize маски часто дают быстрый contest-буст.",
+    cards: [
+      {
+        title: "Dataset возвращает готовые tensors",
+        body: "Dataset должен отвечать за чтение и преобразование одного примера. Loader только собирает batch.",
+        bullets: ["В `__getitem__` не обучай модель и не считай метрики.", "Spatial transforms для image/mask должны быть синхронны.", "Для detection нужен кастомный `collate_fn`."],
+        code:
+          "class MaskDataset(torch.utils.data.Dataset):\n    def __init__(self, img_paths, mask_paths, transform=None):\n        self.img_paths = img_paths\n        self.mask_paths = mask_paths\n        self.transform = transform\n\n    def __getitem__(self, idx):\n        img = Image.open(self.img_paths[idx]).convert('RGB')\n        mask = Image.open(self.mask_paths[idx]).convert('L')\n        if self.transform:\n            img, mask = self.transform(img, mask)\n        return img, mask\n\n    def __len__(self):\n        return len(self.img_paths)",
+      },
+      {
+        title: "Правильный train step",
+        body: "Порядок важен концептуально: очистили старые градиенты, посчитали forward/loss, сделали backward, обновили веса.",
+        bullets: ["`zero_grad` можно делать в начале итерации или после `step`, но не забывать.", "`model.train()` для обучения.", "`model.eval()` и `no_grad` для валидации."],
+        code:
+          "model.train()\nfor x, y in loader:\n    x = x.to(device)\n    y = y.to(device)\n\n    optimizer.zero_grad()\n    logits = model(x)\n    loss = criterion(logits, y)\n    loss.backward()\n    optimizer.step()",
+      },
     ],
   },
   {
-    title: "Реляции: predicate отдельно",
-    kicker: "детектор + табличный классификатор",
+    id: "cv-preprocess",
+    level: "2. CV preprocessing",
+    title: "Изображения, маски, bbox",
+    subtitle: "CV-задачи часто проигрываются не архитектурой, а resize, каналами и неверным форматом bbox.",
+    diagram: "detection",
+    cards: [
+      {
+        title: "PIL/OpenCV и порядок каналов",
+        body: "PIL читает RGB, OpenCV читает BGR. Если перепутать, модель видит другой цветовой мир.",
+        bullets: ["Image нормализуй в float.", "Torch ждёт `[C,H,W]`, не `[H,W,C]`.", "Маску не нормализуй как RGB-картинку."],
+        code:
+          "img = cv2.imread(path)\nimg = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)\nimg = img.astype(np.float32) / 255.0\nimg = torch.from_numpy(img).permute(2, 0, 1)",
+      },
+      {
+        title: "Resize image и mask разными способами",
+        body: "Картинку можно сглаживать, но mask содержит class ids. Bilinear превратит классы в дробную кашу.",
+        bullets: ["Image: bilinear/bicubic.", "Mask: nearest.", "Bbox после resize масштабируй по x/y отдельно."],
+        code:
+          "img = TF.resize(img, (224, 224), interpolation=InterpolationMode.BILINEAR)\nmask = TF.resize(mask, (224, 224), interpolation=InterpolationMode.NEAREST)\n\nmask = torch.from_numpy(np.array(mask) > 0)[None].float()",
+      },
+    ],
+  },
+  {
+    id: "segmentation",
+    level: "3. Segmentation",
+    title: "Logits, masks, Dice/IoU",
+    subtitle: "Для Cuties/Radar сначала добейся честного binary pipeline: loss на logits, метрики на thresholded mask, postprocess отдельно.",
+    diagram: "segmentation",
+    cards: [
+      {
+        title: "BCE + Dice для binary mask",
+        body: "BCE учит пиксели независимо, Dice добавляет давление на форму объекта. Sigmoid нужен внутри Dice, но не перед BCEWithLogits.",
+        bullets: ["`logits`: `[B,1,H,W]`.", "`target`: `[B,1,H,W]` float.", "Threshold подбирается на validation."],
+        code:
+          "def dice_score(prob, target, eps=1e-6):\n    inter = (prob * target).sum(dim=(1, 2, 3))\n    denom = prob.sum(dim=(1, 2, 3)) + target.sum(dim=(1, 2, 3))\n    return ((2 * inter + eps) / (denom + eps)).mean()\n\nbce = F.binary_cross_entropy_with_logits(logits, target)\nprob = torch.sigmoid(logits)\nloss = bce + (1 - dice_score(prob, target))",
+      },
+      {
+        title: "Threshold sweep",
+        body: "0.5 не обязан быть лучшим. На маленькой сегментации sweep threshold часто даёт больше, чем новая голова.",
+        bullets: ["Подбирай threshold только на validation.", "Сохраняй лучший threshold для test.", "Largest component убирает шум, но может вредить нескольким объектам."],
+        code:
+          "best_t, best_iou = 0.5, -1\nfor t in np.linspace(0.1, 0.9, 17):\n    pred = (val_prob > t).astype(np.uint8)\n    score = mean_iou(pred, val_masks)\n    if score > best_iou:\n        best_t, best_iou = t, score",
+      },
+    ],
+  },
+  {
+    id: "detection",
+    level: "4. Detection",
+    title: "DETR targets и relation rows",
+    subtitle: "DETR учит объекты, а не отношения. Если в датасете subject/object/predicate, сначала собери уникальные объекты, потом отдельно predicate.",
+    diagram: "detr",
+    cards: [
+      {
+        title: "Relation row → objects",
+        body: "Одна строка relation dataset может содержать два объекта. Для детектора нужно превратить все строки одного image_id в список уникальных boxes/classes.",
+        bullets: ["Не дублируй одинаковый subject из нескольких predicates.", "`xyxy` часто нужно конвертировать в `cxcywh`.", "Labels должны быть integer ids."],
+        code:
+          "objects = []\nfor row in rows_for_image:\n    objects.append((row.subject_label, [row.subject_x1, row.subject_y1, row.subject_x2, row.subject_y2]))\n    objects.append((row.object_label, [row.object_x1, row.object_y1, row.object_x2, row.object_y2]))\n\nobjects = list(dict.fromkeys(objects))  # simple dedup for exact matches",
+      },
+      {
+        title: "Detection collate_fn",
+        body: "У разных картинок разное число объектов. Поэтому targets обычно остаются списком dict, а не stack-ятся в один tensor.",
+        bullets: ["Images можно stack-нуть, если resize одинаковый.", "Boxes: `[N,4]`.", "Labels: `[N]`."],
+        code:
+          "def collate_fn(batch):\n    images, targets = zip(*batch)\n    images = torch.stack(images)\n    return images, list(targets)\n\nloader = DataLoader(ds, batch_size=8, shuffle=True, collate_fn=collate_fn)",
+      },
+    ],
+  },
+  {
+    id: "relations-recsys",
+    level: "5. Ranking",
+    title: "Predicate classifier и reranking",
+    subtitle: "После детектора задача часто становится табличной: пары объектов, кандидаты, признаки, ранжирование.",
     diagram: "relation",
-    body:
-      "Для visual relations удобно разделить задачу: DETR находит объекты, а CatBoost/LightGBM классифицирует predicate по признакам пары. Это проще валидировать и быстрее чинить в контесте.",
-    bullets: [
-      "Фичи пары: labels, площади, IoU, расстояние центров, относительное положение.",
-      "На train можно брать true boxes, на inference пары строятся из предсказанных boxes.",
-      "Валидация должна совпадать с inference-сценарием, иначе score будет слишком оптимистичным.",
+    cards: [
+      {
+        title: "Фичи для predicate",
+        body: "Если детекция отдельно, predicate можно учить CatBoost/LightGBM по геометрии пары и class labels.",
+        bullets: ["Площади и центры bbox.", "IoU и относительное положение.", "Subject/object label ids."],
+        code:
+          "def pair_features(s_box, o_box, s_label, o_label):\n    sx = (s_box[0] + s_box[2]) / 2\n    sy = (s_box[1] + s_box[3]) / 2\n    ox = (o_box[0] + o_box[2]) / 2\n    oy = (o_box[1] + o_box[3]) / 2\n    return {\n        's_label': s_label,\n        'o_label': o_label,\n        'dx': ox - sx,\n        'dy': oy - sy,\n        'iou': bbox_iou(s_box, o_box),\n    }",
+      },
+      {
+        title: "Two-stage recsys",
+        body: "Candidate generator отвечает за recall, reranker отвечает за порядок. Не требуй от первой стадии идеального ранжирования.",
+        bullets: ["Сначала top-K кандидатов на user.", "Потом features для user-item rows.", "Group/query id нужен для ranking loss."],
+        code:
+          "candidates = popular_items_by_category(user_history, k=200)\nrows = make_user_item_features(user_id, candidates)\nrows['score'] = ranker.predict(rows[feature_cols])\nsubmission = rows.sort_values('score', ascending=False).head(20)",
+      },
     ],
   },
   {
-    title: "Recsys: два этажа",
-    kicker: "candidates → rerank",
-    diagram: "recsys",
-    body:
-      "В recommender systems первый этаж обязан быстро найти много хороших кандидатов, а второй этаж сортирует их богатыми признаками. Не путай метрики: recall кандидатов и качество reranker — разные вещи.",
-    bullets: [
-      "Candidate generator оптимизирует Recall@K и скорость.",
-      "Reranker получает user-item rows и group/query id.",
-      "OOF-признаки и time split спасают от leakage.",
-    ],
-  },
-  {
-    title: "Diffusion: шум как задача",
-    kicker: "x0 → xt → eps",
+    id: "advanced-dl",
+    level: "6. Advanced DL",
+    title: "Transformers и diffusion без магии",
+    subtitle: "На олимпиадах обычно роляет не огромная модель, а понимание tensor shapes, mask и training target.",
     diagram: "diffusion",
-    body:
-      "В базовой diffusion-модели мы портим картинку шумом на случайном timestep и учим сеть предсказывать добавленный noise. На inference идём назад: из шума постепенно восстанавливаем изображение.",
-    bullets: [
-      "`t` влияет на уровень шума, поэтому timestep embedding подаётся в модель.",
-      "Частый target — noise `eps`, не сама чистая картинка.",
-      "Для маленьких задач важнее понять shapes и scheduler, чем гнаться за большой архитектурой.",
+    cards: [
+      {
+        title: "Self-attention shape",
+        body: "Attention берёт query/key/value и строит веса между токенами. Важно понимать, где batch, где sequence, где hidden.",
+        bullets: ["`x`: `[B,T,D]`.", "`attn`: `[B,T,T]`.", "Mask запрещает смотреть в ненужные позиции."],
+        code:
+          "q = Wq(x)  # [B,T,D]\nk = Wk(x)  # [B,T,D]\nv = Wv(x)  # [B,T,D]\n\nscores = q @ k.transpose(-1, -2) / math.sqrt(q.size(-1))\nweights = torch.softmax(scores, dim=-1)\nout = weights @ v",
+      },
+      {
+        title: "Diffusion training step",
+        body: "Базовая diffusion-задача: взять чистый объект, добавить шум на timestep t и научить модель предсказывать этот шум.",
+        bullets: ["Target часто `noise`, а не clean image.", "`t` подаётся в модель.", "Inference — обратный процесс от шума к картинке."],
+        code:
+          "noise = torch.randn_like(x0)\nt = torch.randint(0, T, (x0.size(0),), device=x0.device)\nxt = scheduler.add_noise(x0, noise, t)\n\npred_noise = model(xt, t)\nloss = F.mse_loss(pred_noise, noise)",
+      },
     ],
   },
 ];
@@ -4423,7 +4512,7 @@ function renderPracticeSets() {
 
 function renderLibrary() {
   if (els.theoryGrid) {
-    els.theoryGrid.innerHTML = theoryCards.map(renderTheoryCard).join("");
+    els.theoryGrid.innerHTML = theoryChapters.map(renderTheoryChapter).join("");
   }
   if (els.libraryGrid) {
     els.libraryGrid.innerHTML = libraryCards
@@ -4437,18 +4526,38 @@ function renderLibrary() {
   renderGithubIntegration();
 }
 
-function renderTheoryCard(card) {
+function renderTheoryChapter(chapter) {
+  return `
+    <section class="theory-chapter" id="theory-${escapeHtml(chapter.id)}">
+      <div class="theory-chapter-head">
+        <div class="theory-step">${escapeHtml(chapter.level)}</div>
+        <div class="theory-chapter-copy">
+          <h3>${escapeHtml(chapter.title)}</h3>
+          <p>${escapeHtml(chapter.subtitle)}</p>
+        </div>
+        ${renderTheoryDiagram(chapter.diagram)}
+      </div>
+      <div class="theory-card-list">
+        ${chapter.cards.map(renderTheoryCard).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderTheoryCard(card, index) {
   return `
     <article class="theory-card">
-      ${renderTheoryDiagram(card.diagram)}
-      <div class="theory-copy">
-        <span class="eyebrow">${escapeHtml(card.kicker)}</span>
-        <h3>${escapeHtml(card.title)}</h3>
-        <p>${escapeHtml(card.body)}</p>
-        <ul>
-          ${card.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-        </ul>
+      <div class="theory-card-head">
+        <span class="theory-card-number">${index + 1}</span>
+        <div>
+          <h4>${escapeHtml(card.title)}</h4>
+          <p>${escapeHtml(card.body)}</p>
+        </div>
       </div>
+      <ul class="theory-points">
+        ${card.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+      <pre class="theory-code"><code>${escapeHtml(card.code)}</code></pre>
     </article>
   `;
 }
@@ -4459,6 +4568,13 @@ function renderTheoryDiagram(kind) {
       <div class="theory-diagram diagram-detection" aria-hidden="true">
         <div class="diagram-image"><span class="bbox subject">person</span><span class="bbox object">bike</span></div>
         <div class="diagram-row"><span>xyxy</span><i></i><span>xywh</span><i></i><span>target</span></div>
+      </div>
+    `,
+    start: `
+      <div class="theory-diagram diagram-start" aria-hidden="true">
+        <div class="shape-chip">shape</div>
+        <div class="shape-chip">dtype</div>
+        <div class="shape-chip">split</div>
       </div>
     `,
     detr: `

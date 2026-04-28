@@ -93,7 +93,9 @@ assert.ok(app.includes("async function checkForUpdates"), "app should check GitH
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
 assert.ok(app.includes("const GUIDE_SEEN_KEY"), "app should remember whether welcome guide was seen");
 assert.ok(app.includes("function maybeOpenGuide"), "app should open the welcome guide on first run");
-assert.ok(app.includes("const theoryCards"), "app should include a built-in theory section");
+assert.ok(app.includes("const theoryChapters"), "app should include a structured built-in theory section");
+assert.ok(app.includes("function renderTheoryChapter"), "app should render theory by topic chapters");
+assert.ok(app.includes("theory-code"), "theory section should include implementation code examples");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
 assert.ok(!app.includes("async function submitLocalAuth"), "app should not include local auth fallback");
