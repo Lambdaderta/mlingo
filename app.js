@@ -5,7 +5,7 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "0.1.9";
+const APP_VERSION = "0.1.10";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -5173,7 +5173,10 @@ async function checkForUpdates() {
     const release = await response.json();
     const latest = String(release.tag_name || "").replace(/^v/, "");
     const apk = (release.assets || []).find((asset) => asset.name.endsWith(".apk"));
-    const mac = (release.assets || []).find((asset) => asset.name.toLowerCase().includes("macos") && asset.name.endsWith(".zip"));
+    const mac = (release.assets || []).find((asset) => {
+      const name = asset.name.toLowerCase();
+      return name.includes("macos") && (name.endsWith(".dmg") || name.endsWith(".zip"));
+    });
     const newer = compareVersions(latest, APP_VERSION) > 0;
     if (els.releaseLink && release.html_url) els.releaseLink.href = release.html_url;
     const links = [

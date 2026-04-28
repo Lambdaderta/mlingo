@@ -115,6 +115,8 @@ assert.ok(macosApp.includes("applicationShouldHandleReopen"), "macOS app should 
 assert.ok(macosApp.includes("setFrameAutosaveName"), "macOS app should remember its window frame");
 assert.ok(macosBuildScript.includes("CFBundleShortVersionString $APP_VERSION"), "macOS bundle version should follow package.json");
 assert.ok(macosBuildScript.includes("MLingo.icns"), "macOS build should copy the app icon");
+assert.ok(macosBuildScript.includes("codesign --force --deep --sign -"), "macOS build should ad-hoc sign the app");
+assert.ok(macosBuildScript.includes("hdiutil create"), "macOS build should produce a DMG artifact");
 assert.ok(fs.existsSync(path.join(root, "macos/MLingo.icns")), "macOS icns icon should exist");
 assert.ok(server.includes("users_github_id_unique_idx"), "server should keep GitHub ids unique");
 

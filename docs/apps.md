@@ -76,29 +76,40 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v0.1.9-macOS.zip
+dist/MLingo-v0.1.10-macOS.dmg
 ```
 
-Это unsigned build. При первом запуске macOS может попросить подтвердить открытие приложения из внешнего источника.
+Это ad-hoc signed build. Он подходит для бета-теста, но не заменяет Apple Developer ID signing и notarization.
+
+Открой DMG и перетащи `MLingo.app` в `Applications`.
+
+Если macOS пишет, что приложение повреждено или его невозможно открыть, это обычно Gatekeeper quarantine для приложения, скачанного из интернета. После установки выполни:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MLingo.app
+open /Applications/MLingo.app
+```
+
+Если приложение лежит не в `/Applications`, подставь свой путь к `MLingo.app`.
 
 ## GitHub Releases для приложений
 
-APK и macOS zip не нужно хранить в git. Workflow `.github/workflows/release-apk.yml` публикует оба артефакта в GitHub Release.
+APK и macOS DMG не нужно хранить в git. Workflow `.github/workflows/release-apk.yml` публикует оба артефакта в GitHub Release.
 
 Сделать новый релиз:
 
 ```bash
-git tag -a v0.1.9 -m "MLingo v0.1.9"
-git push origin v0.1.9
+git tag -a v0.1.10 -m "MLingo v0.1.10"
+git push origin v0.1.10
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v0.1.9 -> Assets
+GitHub repo -> Releases -> v0.1.10 -> Assets
 ```
 
-Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать нужный tag и workflow перезальет APK/macOS zip в существующий Release.
+Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать нужный tag и workflow перезальет APK/macOS DMG в существующий Release.
 
 Важно: это debug APK, его можно ставить друзьям для теста, но для Play Store позже понадобится release signing key и release build.
 
@@ -115,7 +126,7 @@ lesson-packs/index.json
 lesson-packs/*.json
 ```
 
-В приложении открой `Шпаргалки -> Паки заданий` и синхронизируй URL:
+В приложении открой `Теория -> Паки заданий` и синхронизируй URL:
 
 ```text
 https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json
