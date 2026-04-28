@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean25" />
-    <script defer src="./app.js?v=clean25"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean26" />
+    <script defer src="./app.js?v=clean26"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -24,6 +24,14 @@
             <small>ML practice</small>
           </span>
         </a>
+        <nav class="top-nav" aria-label="Основная навигация">
+          <button class="top-nav-button nav-button is-active" data-screen="roadmap" type="button">Карта</button>
+          <button class="top-nav-button nav-button" data-screen="topics" type="button">Темы</button>
+          <button class="top-nav-button nav-button" data-screen="lesson" type="button">Урок</button>
+          <button class="top-nav-button nav-button" data-screen="review" type="button">Разборы</button>
+          <button class="top-nav-button nav-button" data-screen="library" type="button">Теория</button>
+          <button class="top-nav-button nav-button" data-screen="profile" type="button">Профиль</button>
+        </nav>
         <div class="top-actions">
           <button class="ghost-button" id="focusModeButton" type="button">Режим фокуса</button>
           <button class="ghost-button" id="accountButton" type="button">Войти</button>
@@ -43,6 +51,7 @@
 
           <nav class="side-nav" aria-label="Разделы">
             <button class="nav-button is-active" data-screen="roadmap" type="button">Карта</button>
+            <button class="nav-button" data-screen="topics" type="button">Темы</button>
             <button class="nav-button" data-screen="lesson" type="button">Урок</button>
             <button class="nav-button" data-screen="review" type="button">Разборы</button>
             <button class="nav-button" data-screen="profile" type="button">Профиль</button>
@@ -105,6 +114,27 @@
               </div>
               <div class="boss-grid" id="bossGrid"></div>
             </section>
+          </section>
+
+          <section class="app-screen" id="screen-topics">
+            <article class="lesson-card topics-screen">
+              <div class="lesson-meta">
+                <div>
+                  <span class="eyebrow">Темы</span>
+                  <h2>Выбор модуля</h2>
+                </div>
+                <span class="lesson-type" id="topicsBadge">0 / 0</span>
+              </div>
+              <p class="prompt">Выбери модуль, а потом открой карту задач внутри него.</p>
+              <div class="track-filter topics-filter" role="group" aria-label="Фильтр тем">
+                <button class="filter-chip is-active" data-filter="all" type="button">Все</button>
+                <button class="filter-chip" data-filter="cv" type="button">CV</button>
+                <button class="filter-chip" data-filter="torch" type="button">Torch</button>
+                <button class="filter-chip" data-filter="contest" type="button">Contest</button>
+                <button class="filter-chip" data-filter="data" type="button">Data</button>
+              </div>
+              <div class="module-list module-list-main" id="moduleListMain"></div>
+            </article>
           </section>
 
           <section class="app-screen" id="screen-lesson">
@@ -326,6 +356,7 @@
 
       <nav class="mobile-tabs" aria-label="Мобильная навигация">
         <button class="mobile-tab is-active" data-screen="roadmap" type="button">Карта</button>
+        <button class="mobile-tab" data-screen="topics" type="button">Темы</button>
         <button class="mobile-tab" data-screen="lesson" type="button">Урок</button>
         <button class="mobile-tab" data-screen="review" type="button">Разборы</button>
         <button class="mobile-tab" data-screen="profile" type="button">Профиль</button>

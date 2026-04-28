@@ -5,7 +5,7 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "2.0.0";
+const APP_VERSION = "1.0.0";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const PROJECT_ISSUES_URL = "https://github.com/Lambdaderta/mlingo/issues/new";
 const PYODIDE_LOCAL_SCRIPT = "./vendor/pyodide/pyodide.js";
@@ -3614,6 +3614,8 @@ document.addEventListener("DOMContentLoaded", () => {
 function cacheElements() {
   [
     "moduleList",
+    "moduleListMain",
+    "topicsBadge",
     "railProgress",
     "missionEyebrow",
     "missionTitle",
@@ -3715,7 +3717,7 @@ function bindEvents() {
   document.querySelectorAll(".filter-chip").forEach((button) => {
     button.addEventListener("click", () => {
       document.querySelectorAll(".filter-chip").forEach((b) => b.classList.remove("is-active"));
-      button.classList.add("is-active");
+      document.querySelectorAll(`.filter-chip[data-filter="${button.dataset.filter}"]`).forEach((b) => b.classList.add("is-active"));
       renderTopics(button.dataset.filter);
     });
   });
@@ -3820,8 +3822,17 @@ function setScreen(screen, persist = true) {
 
 function renderTopics(filter = "all") {
   const visible = filter === "all" ? topics : topics.filter((topic) => topic.tag === filter);
-  els.moduleList.innerHTML = "";
+  const containers = [els.moduleList, els.moduleListMain].filter(Boolean);
+  containers.forEach((container) => {
+    container.innerHTML = "";
+  });
+  if (els.topicsBadge) els.topicsBadge.textContent = `${visible.length} / ${topics.length}`;
   visible.forEach((topic) => {
+    containers.forEach((container) => container.appendChild(createModuleButton(topic)));
+  });
+}
+
+function createModuleButton(topic) {
     const done = completedInTopic(topic);
     const button = document.createElement("button");
     button.className = `module-button${topic.id === currentTopicId ? " is-active" : ""}`;
@@ -3844,8 +3855,7 @@ function renderTopics(filter = "all") {
       renderAll();
       setScreen("roadmap");
     });
-    els.moduleList.appendChild(button);
-  });
+    return button;
 }
 
 function renderRoadmap() {

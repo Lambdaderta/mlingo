@@ -73,11 +73,27 @@ textarea:focus-visible {
   min-height: 4.25rem;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
   border-bottom: 1px solid var(--line);
   background: rgba(11, 13, 18, 0.96);
   padding: 0.75rem clamp(1rem, 2vw, 1.5rem);
   backdrop-filter: blur(16px);
+}
+
+.top-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.top-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .brand {
@@ -175,6 +191,13 @@ textarea:focus-visible {
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
 
+.top-nav-button {
+  flex: 0 0 auto;
+  min-height: 2.35rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+}
+
 .primary-button,
 .nav-button.is-active,
 .filter-chip.is-active,
@@ -233,12 +256,19 @@ body[data-screen="lesson"] .workspace {
   grid-template-columns: minmax(0, 1fr);
 }
 
-body[data-screen="lesson"] .skill-rail {
+body[data-screen="lesson"] .skill-rail,
+body[data-screen="topics"] .skill-rail {
   display: none;
 }
 
-body[data-screen="lesson"] .screen-stack {
+body[data-screen="lesson"] .screen-stack,
+body[data-screen="topics"] .screen-stack {
   grid-column: 1;
+}
+
+body[data-screen="topics"] .workspace {
+  width: min(100%, 92rem);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .skill-rail,
@@ -356,6 +386,10 @@ body[data-screen="lesson"] .screen-stack {
   gap: 0.7rem;
 }
 
+.module-list-main {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+
 .module-button {
   width: 100%;
   display: grid;
@@ -369,6 +403,10 @@ body[data-screen="lesson"] .screen-stack {
   color: var(--ink);
   padding: 0.75rem;
   text-align: left;
+}
+
+.module-list-main .module-button {
+  min-height: 5.1rem;
 }
 
 .module-button.is-active {
@@ -2214,6 +2252,12 @@ body.focus-mode .screen-stack {
     gap: 0.4rem;
   }
 
+  .top-nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .top-actions .ghost-button {
     display: none;
   }
@@ -2323,7 +2367,7 @@ body.focus-mode .screen-stack {
     left: 0.75rem;
     z-index: 60;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 0.4rem;
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -2337,6 +2381,7 @@ body.focus-mode .screen-stack {
     padding: 0.45rem;
     border-color: transparent;
     background: transparent;
+    font-size: 0.72rem;
   }
 
   body.focus-mode .skill-rail {

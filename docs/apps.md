@@ -76,7 +76,7 @@ npm run macos:build
 
 ```text
 dist/MLingo.app
-dist/MLingo-v2.0.0-macOS.dmg
+dist/MLingo-v1.0.0-macOS.dmg
 ```
 
 Это ad-hoc signed build. Он подходит для бета-теста, но не заменяет Apple Developer ID signing и notarization.
@@ -99,14 +99,14 @@ APK и macOS DMG не нужно хранить в git. Workflow `.github/workfl
 Сделать новый релиз:
 
 ```bash
-git tag -a v2.0.0 -m "MLingo v2.0.0"
-git push origin v2.0.0
+git tag -a v1.0.0 -m "MLingo v1.0.0"
+git push origin v1.0.0
 ```
 
 После завершения GitHub Actions файл появится здесь:
 
 ```text
-GitHub repo -> Releases -> v2.0.0 -> Assets
+GitHub repo -> Releases -> v1.0.0 -> Assets
 ```
 
 Если tag уже существует, можно открыть `Actions -> release-apps -> Run workflow`, вписать нужный tag и workflow перезальет APK/macOS DMG в существующий Release.
