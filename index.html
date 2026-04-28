@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean26" />
-    <script defer src="./app.js?v=clean26"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean28" />
+    <script defer src="./app.js?v=clean28"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -24,18 +24,21 @@
             <small>ML practice</small>
           </span>
         </a>
-        <nav class="top-nav" aria-label="Основная навигация">
-          <button class="top-nav-button nav-button is-active" data-screen="roadmap" type="button">Карта</button>
-          <button class="top-nav-button nav-button" data-screen="topics" type="button">Темы</button>
-          <button class="top-nav-button nav-button" data-screen="lesson" type="button">Урок</button>
-          <button class="top-nav-button nav-button" data-screen="review" type="button">Разборы</button>
-          <button class="top-nav-button nav-button" data-screen="library" type="button">Теория</button>
-          <button class="top-nav-button nav-button" data-screen="profile" type="button">Профиль</button>
-        </nav>
         <div class="top-actions">
-          <button class="ghost-button" id="focusModeButton" type="button">Режим фокуса</button>
-          <button class="ghost-button" id="accountButton" type="button">Войти</button>
-          <button class="primary-button" id="dailyButton" type="button">Сегодня</button>
+          <button class="account-menu-button" id="accountButton" type="button" aria-haspopup="menu" aria-expanded="false">Меню</button>
+          <div class="account-menu" id="accountMenu" role="menu" hidden>
+            <button data-screen="roadmap" type="button" role="menuitem">Карта</button>
+            <button data-screen="topics" type="button" role="menuitem">Темы</button>
+            <button data-screen="lesson" type="button" role="menuitem">Урок</button>
+            <button data-screen="review" type="button" role="menuitem">Разборы</button>
+            <button data-screen="library" type="button" role="menuitem">Теория</button>
+            <button data-screen="profile" type="button" role="menuitem">Настройки</button>
+            <hr />
+            <button id="menuFocusButton" type="button" role="menuitem">Режим фокуса</button>
+            <button id="menuGuideButton" type="button" role="menuitem">Гайд</button>
+            <button id="menuLoginButton" type="button" role="menuitem">Войти через GitHub</button>
+            <button id="menuLogoutButton" type="button" role="menuitem" hidden>Выйти</button>
+          </div>
         </div>
       </header>
 
@@ -76,7 +79,7 @@
           <section class="app-screen is-active" id="screen-roadmap">
             <div class="mission-strip roadmap-hero">
               <div>
-                <span class="eyebrow" id="missionEyebrow">Сегодня</span>
+                <span class="eyebrow" id="missionEyebrow">Текущий модуль</span>
                 <h1 id="missionTitle">Карта</h1>
               </div>
               <div class="stat-grid">
@@ -144,7 +147,10 @@
                   <span class="eyebrow" id="lessonTrack">Тема</span>
                   <h2 id="lessonTitle">Урок</h2>
                 </div>
-                <span class="lesson-type" id="lessonType">Блоки</span>
+                <div class="lesson-header-actions">
+                  <button class="ghost-button compact-button" id="lessonBackButton" type="button">← Карта</button>
+                  <span class="lesson-type" id="lessonType">Блоки</span>
+                </div>
               </div>
 
               <p class="prompt" id="lessonPrompt"></p>
@@ -353,15 +359,6 @@
           </section>
         </aside>
       </main>
-
-      <nav class="mobile-tabs" aria-label="Мобильная навигация">
-        <button class="mobile-tab is-active" data-screen="roadmap" type="button">Карта</button>
-        <button class="mobile-tab" data-screen="topics" type="button">Темы</button>
-        <button class="mobile-tab" data-screen="lesson" type="button">Урок</button>
-        <button class="mobile-tab" data-screen="review" type="button">Разборы</button>
-        <button class="mobile-tab" data-screen="profile" type="button">Профиль</button>
-        <button class="mobile-tab" data-screen="library" type="button">Теория</button>
-      </nav>
 
       <div class="auth-modal" id="authModal" hidden>
         <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle">

@@ -1,4 +1,4 @@
-const CACHE_NAME = "mlingo-clean-v26";
+const CACHE_NAME = "mlingo-clean-v28";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
   "./app.js",
   "./python-runner-worker.js",
   "./lesson-packs/index.json",
+  "./lesson-packs/core.json",
   "./lesson-packs/cv-offline-pack.json",
   "./lesson-packs/cv-fundamentals-pack.json",
   "./lesson-packs/recsys-rerank-pack.json",

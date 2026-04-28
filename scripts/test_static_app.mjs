@@ -60,6 +60,7 @@ assert.ok(html.indexOf('class="settings-panel"') < html.indexOf('id="guideButton
 assert.ok(html.includes("./assets/brand/mlingo-cat-logo-512.png"), "index.html should use the MLingo cat logo in the app shell");
 assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-readme-card.png")), "README card image should exist");
 assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-cat-logo-512.png")), "app logo image should exist");
+assert.ok(fs.existsSync(path.join(root, "lesson-packs/core.json")), "core lesson pack should exist");
 
 const cacheMatch = sw.match(/CACHE_NAME\s*=\s*"mlingo-clean-v(\d+)"/);
 assert.ok(cacheMatch, "service worker cache version should be mlingo-clean-vN");
@@ -90,6 +91,9 @@ for (const pack of packIndex.packs) {
 
 assert.ok(app.includes("async function syncLessonPacksFromGithub"), "app should include GitHub lesson sync");
 assert.ok(app.includes("async function loadRuntimeConfig"), "app should load runtime backend config");
+assert.ok(app.includes('"./lesson-packs/core.json"'), "app should load core lessons from JSON");
+assert.ok(app.includes("let topics = []"), "app should keep lesson content out of app.js");
+assert.ok(!app.includes("const topics = ["), "app should not embed the core lesson bank in app.js");
 assert.ok(app.includes("function startGithubLogin"), "app should include GitHub login flow");
 assert.ok(app.includes("const AUTH_REQUIRED = false"), "app should allow practice without registration in local/offline mode");
 assert.ok(app.includes("function enforceAuthGate"), "app should enforce the auth gate");
@@ -115,6 +119,7 @@ assert.ok(app.includes("async function postReviewComment"), "app should include 
 assert.ok(app.includes("Скрытые тесты"), "lesson brief should expose hidden-test language for runner tasks");
 assert.ok(app.includes("function isCodeBriefLesson"), "lesson brief should only use LeetCode-style rows for code tasks");
 assert.ok(app.includes("Для задач с запуском кода нужен GitHub-вход"), "runner tasks should require GitHub login before execution");
+assert.ok(app.includes("async function runServerPythonLessonTests"), "app should submit code lessons to the server runner first");
 assert.ok(app.includes("PYODIDE_LOCAL_SCRIPT"), "app should define a local Pyodide source");
 assert.ok(app.includes("function runPythonLessonTests"), "app should include browser Python test runner support");
 assert.ok(app.includes("trustedRunner"), "app should mark trusted bundled lessons for runner tests");
@@ -135,6 +140,8 @@ assert.ok(server.includes("create table if not exists solutions"), "server shoul
 assert.ok(server.includes("create table if not exists solution_comments"), "server should persist review comments");
 assert.ok(server.includes("/api/review/solutions"), "server should expose public solution review endpoints");
 assert.ok(server.includes("/api/config"), "server should expose runtime config endpoint");
+assert.ok(server.includes("/api/runner/python"), "server should expose Python runner endpoint");
+assert.ok(server.includes("RUNNER_SEMAPHORE"), "server runner should limit concurrent executions");
 assert.ok(mainActivity.includes("SYSTEM_UI_FLAG_IMMERSIVE_STICKY"), "Android app should hide navigation bars on older devices");
 assert.ok(mainActivity.includes("WindowInsets.Type.navigationBars"), "Android app should hide navigation bars on modern devices");
 assert.ok(macosApp.includes("WKWebView"), "macOS app should embed the web app in WKWebView");

@@ -7,7 +7,11 @@ import http.cookies
 import json
 import os
 import re
+import subprocess
 import secrets
+import sys
+import tempfile
+import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 from http import HTTPStatus
@@ -38,6 +42,141 @@ GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_API_URL = "https://api.github.com"
 OAUTH_STATE_TTL = 60 * 10
 REPO_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+RUNNER_TIMEOUT_SECONDS = int(os.environ.get("MLINGO_RUNNER_TIMEOUT_SECONDS", "12"))
+RUNNER_MAX_CODE_CHARS = int(os.environ.get("MLINGO_RUNNER_MAX_CODE_CHARS", "20000"))
+RUNNER_MAX_OUTPUT_CHARS = int(os.environ.get("MLINGO_RUNNER_MAX_OUTPUT_CHARS", "6000"))
+RUNNER_MEMORY_MB = int(os.environ.get("MLINGO_RUNNER_MEMORY_MB", "1536"))
+RUNNER_QUEUE_TIMEOUT_SECONDS = int(os.environ.get("MLINGO_RUNNER_QUEUE_TIMEOUT_SECONDS", "120"))
+RUNNER_SEMAPHORE = threading.BoundedSemaphore(int(os.environ.get("MLINGO_RUNNER_CONCURRENCY", "1")))
+RUNNER_TASKS = {
+    "cv-write-mask-to-bbox": {
+        "packages": ["numpy"],
+        "setup": "import numpy as np",
+        "tests": (
+            "empty = np.zeros((3, 4), dtype=np.uint8)\n"
+            "assert mask_to_bbox(empty) is None\n"
+            "mask = np.zeros((5, 6), dtype=np.uint8)\n"
+            "mask[1:4, 2:5] = 1\n"
+            "assert mask_to_bbox(mask) == [2, 1, 4, 3]\n"
+            "mask = np.zeros((4, 4), dtype=bool)\n"
+            "mask[3, 0] = True\n"
+            "assert mask_to_bbox(mask) == [0, 3, 0, 3]"
+        ),
+    },
+    "extra-cv-rle-encode": {
+        "packages": ["numpy"],
+        "setup": "import numpy as np",
+        "tests": (
+            "assert rle_encode(np.zeros((2, 3), dtype=np.uint8)) == ''\n"
+            "mask = np.zeros((3, 4), dtype=np.uint8)\n"
+            "mask[0, 0] = 1\n"
+            "mask[2, 1] = 1\n"
+            "assert rle_encode(mask) == '1 1 6 1'\n"
+            "block = np.zeros((3, 3), dtype=np.uint8)\n"
+            "block[1:, 1:] = 1\n"
+            "assert rle_encode(block) == '5 2 8 2'"
+        ),
+    },
+    "extra-cv-rle-decode": {
+        "packages": ["numpy"],
+        "setup": "import numpy as np",
+        "tests": (
+            "assert np.array_equal(rle_decode('', (2, 3)), np.zeros((2, 3), dtype=np.uint8))\n"
+            "expected = np.zeros((3, 4), dtype=np.uint8)\n"
+            "expected[0, 0] = 1\n"
+            "expected[2, 1] = 1\n"
+            "assert np.array_equal(rle_decode('1 1 6 1', (3, 4)), expected)\n"
+            "block = np.zeros((3, 3), dtype=np.uint8)\n"
+            "block[1:, 1:] = 1\n"
+            "assert np.array_equal(rle_decode('5 2 8 2', (3, 3)), block)"
+        ),
+    },
+    "extra-cv-pad-to-square": {
+        "packages": ["numpy"],
+        "setup": "import numpy as np",
+        "tests": (
+            "rgb = np.arange(2 * 3 * 2, dtype=np.uint8).reshape(2, 3, 2)\n"
+            "out = pad_to_square(rgb, fill=9)\n"
+            "assert out.shape == (3, 3, 2)\n"
+            "assert out.dtype == rgb.dtype\n"
+            "assert np.array_equal(out[:2, :3], rgb)\n"
+            "gray = np.arange(4, dtype=np.int16).reshape(4, 1)\n"
+            "out = pad_to_square(gray, fill=-1)\n"
+            "assert out.shape == (4, 4)\n"
+            "assert out.dtype == gray.dtype\n"
+            "assert np.array_equal(out[:, :1], gray)\n"
+            "assert np.all(out[:, 1:] == -1)"
+        ),
+    },
+    "curated-cv-mask-bbox-exclusive": {
+        "packages": ["numpy"],
+        "setup": "import numpy as np",
+        "tests": (
+            "assert mask_to_bbox_exclusive(np.zeros((2, 2), dtype=np.uint8)) is None\n"
+            "mask = np.zeros((5, 6), dtype=np.uint8)\n"
+            "mask[1:4, 2:5] = 1\n"
+            "assert mask_to_bbox_exclusive(mask) == [2, 1, 5, 4]\n"
+            "mask = np.zeros((3, 3), dtype=bool)\n"
+            "mask[0, 2] = True\n"
+            "assert mask_to_bbox_exclusive(mask) == [2, 0, 3, 1]"
+        ),
+    },
+    "curated-cv-box-iou-numpy": {
+        "setup": "import math",
+        "tests": (
+            "assert abs(box_iou([0, 0, 2, 2], [3, 3, 4, 4])) < 1e-8\n"
+            "assert abs(box_iou([0, 0, 2, 2], [0, 0, 2, 2], eps=0) - 1.0) < 1e-8\n"
+            "expected = 1 / 7\n"
+            "assert abs(box_iou([0, 0, 2, 2], [1, 1, 3, 3], eps=0) - expected) < 1e-8\n"
+            "assert abs(box_iou([0, 0, 0, 2], [0, 0, 2, 2])) < 1e-8"
+        ),
+    },
+    "curated-torch-float32-tensor": {
+        "packages": ["torch"],
+        "setup": (
+            "import torch\n"
+            "features = [[1.0, 2.0], [3.0, 4.0]]\n"
+            "class _Model:\n"
+            "    def __call__(self, x):\n"
+            "        assert x.dtype == torch.float32, f'ожидался torch.float32, получен {x.dtype}'\n"
+            "        return x.sum(dim=1)\n"
+            "model = _Model()"
+        ),
+        "tests": (
+            "assert x.dtype == torch.float32\n"
+            "assert logits.shape == (2,)\n"
+            "assert torch.allclose(logits, torch.tensor([3.0, 7.0], dtype=torch.float32))"
+        ),
+    },
+}
+RUNNER_SCRIPT = r"""
+import contextlib
+import io
+import json
+import sys
+
+payload = json.loads(sys.stdin.read())
+namespace = {}
+stdout = io.StringIO()
+stderr = io.StringIO()
+
+try:
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        exec(payload.get("setup") or "", namespace, namespace)
+        exec(payload.get("code") or "", namespace, namespace)
+        exec(payload.get("tests") or "", namespace, namespace)
+    result = {"ok": True}
+except BaseException as exc:
+    if exc.__class__.__name__ == "AssertionError" and not str(exc):
+        error = "AssertionError: hidden test failed"
+    else:
+        error = f"{exc.__class__.__name__}: {exc}"
+    result = {"ok": False, "error": error}
+
+result["stdout"] = stdout.getvalue()
+result["stderr"] = stderr.getvalue()
+print(json.dumps(result, ensure_ascii=False))
+"""
 
 
 def now_ts():
@@ -177,6 +316,103 @@ def read_json(handler):
         return json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError:
         raise ValueError("Некорректный JSON")
+
+
+def trim_runner_output(value):
+    text = str(value or "")
+    if len(text) <= RUNNER_MAX_OUTPUT_CHARS:
+        return text
+    return text[:RUNNER_MAX_OUTPUT_CHARS] + "\n... output truncated ..."
+
+
+def runner_preexec():
+    if os.name != "posix":
+        return None
+
+    def set_limits():
+        try:
+            import resource
+
+            memory_bytes = RUNNER_MEMORY_MB * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
+            resource.setrlimit(resource.RLIMIT_CPU, (RUNNER_TIMEOUT_SECONDS + 1, RUNNER_TIMEOUT_SECONDS + 1))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+        except Exception:
+            pass
+
+    return set_limits
+
+
+def run_python_submission(lesson_id, code, timeout_ms=None):
+    task = RUNNER_TASKS.get(lesson_id)
+    if not task:
+        raise ValueError("Для этой задачи пока нет серверных hidden tests")
+    if not isinstance(code, str) or not code.strip():
+        raise ValueError("Код пустой")
+    if len(code) > RUNNER_MAX_CODE_CHARS:
+        raise ValueError(f"Код длиннее лимита {RUNNER_MAX_CODE_CHARS} символов")
+
+    timeout = RUNNER_TIMEOUT_SECONDS
+    if timeout_ms:
+        timeout = max(1, min(RUNNER_TIMEOUT_SECONDS, int(timeout_ms) // 1000 or RUNNER_TIMEOUT_SECONDS))
+
+    payload = {
+        "setup": task.get("setup") or "",
+        "code": code,
+        "tests": task.get("tests") or "",
+    }
+    env = {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUNBUFFERED": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+    }
+    acquired = RUNNER_SEMAPHORE.acquire(timeout=RUNNER_QUEUE_TIMEOUT_SECONDS)
+    if not acquired:
+        return {
+            "ok": False,
+            "phase": "queue_timeout",
+            "error": "Runner занят. Попробуй еще раз через минуту.",
+        }
+    try:
+        with tempfile.TemporaryDirectory(prefix="mlingo-runner-") as tmpdir:
+            completed = subprocess.run(
+                [sys.executable, "-I", "-c", RUNNER_SCRIPT],
+                input=json_dumps(payload),
+                text=True,
+                capture_output=True,
+                cwd=tmpdir,
+                env=env,
+                timeout=timeout + 2,
+                preexec_fn=runner_preexec(),
+            )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "phase": "timeout",
+            "error": f"Код не завершился за {timeout} сек. Проверь бесконечный цикл или слишком тяжелое решение.",
+        }
+    finally:
+        RUNNER_SEMAPHORE.release()
+
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+    try:
+        result = json.loads(stdout.splitlines()[-1] if stdout else "{}")
+    except json.JSONDecodeError:
+        result = {
+            "ok": False,
+            "phase": "runner_error",
+            "error": "Runner не смог разобрать результат выполнения.",
+        }
+    if completed.returncode != 0 and result.get("ok") is not True:
+        result.setdefault("error", stderr or f"Python завершился с кодом {completed.returncode}")
+    result["stdout"] = trim_runner_output(result.get("stdout") or "")
+    result["stderr"] = trim_runner_output((result.get("stderr") or "") + (f"\n{stderr}" if stderr else ""))
+    return result
 
 
 def normalize_username(value):
@@ -930,6 +1166,17 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                             },
                         },
                     )
+                    return
+
+                if path == "/api/runner/python" and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    payload = read_json(self)
+                    lesson_id = str(payload.get("lessonId") or "").strip()
+                    code = str(payload.get("code") or "")
+                    result = run_python_submission(lesson_id, code, payload.get("timeoutMs"))
+                    self.send_json(HTTPStatus.OK, {"ok": True, "result": result})
                     return
 
                 if path == "/api/health" and method == "GET":

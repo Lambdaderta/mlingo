@@ -6,7 +6,7 @@ MLingo работает как offline-first web app и может быть уп
 
 ```text
 Frontend: index.html + app.js + styles.css
-Банк заданий: встроенные уроки + lesson-packs/*.json
+Банк заданий: lesson-packs/core.json + внешние lesson-packs/*.json
 Кэш прогресса на устройстве: localStorage
 GitHub-прогресс: backend repo mode или local token + GitHub Contents API
 Облачный прогресс позже: GitHub OAuth + Python API + PostgreSQL

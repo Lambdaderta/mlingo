@@ -79,6 +79,7 @@ adb install -r MLingo.apk
 
 Bundled-паки лежат в [lesson-packs](lesson-packs):
 
+- `core.json` — основной банк MLingo, раньше был внутри `app.js`.
 - `cv-offline-pack.json` — CV пайплайны, segmentation, classification и идейные задачи.
 - `cv-fundamentals-pack.json` — image IO, masks, bbox, transforms, CNN/U-Net basics.
 - `recsys-rerank-pack.json` — candidate generation, reranking, ranking metrics и leakage-safe validation.
@@ -138,8 +139,8 @@ npm run check
 
 - [index.html](index.html) — HTML-оболочка приложения.
 - [styles.css](styles.css) — стили desktop/mobile интерфейса.
-- [app.js](app.js) — логика приложения, упражнения, прогресс и offline режим.
-- [lesson-packs](lesson-packs) — JSON-паки заданий.
+- [app.js](app.js) — логика приложения, прогресс, runner UI и offline режим.
+- [lesson-packs](lesson-packs) — JSON-паки заданий, включая основной банк `core.json`.
 - [server.py](server.py) — backend API, GitHub OAuth, PostgreSQL, leaderboard и review queue.
 - [android](android) — Capacitor Android shell.
 - [macos](macos) — macOS WKWebView shell.

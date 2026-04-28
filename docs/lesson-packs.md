@@ -14,10 +14,13 @@ MLingo хранит задания отдельно от логики прило
 ```text
 lesson-packs/
   index.json
+  core.json
   cv-offline-pack.json
   recsys-pack.json
   torch-pack.json
 ```
+
+`core.json` — основной банк MLingo. `app.js` не должен хранить условия задач: он только загружает packs и рендерит приложение.
 
 `index.json` — точка входа:
 

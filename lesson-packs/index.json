@@ -4,6 +4,11 @@
   "title": "MLingo lesson packs",
   "packs": [
       {
+        "id": "mlingo-core-pack-v1",
+        "title": "MLingo Core Lessons",
+        "url": "./core.json"
+      },
+      {
         "id": "cv-offline-pack-v1",
         "title": "CV Offline Expansion",
         "url": "./cv-offline-pack.json"
