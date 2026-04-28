@@ -189,6 +189,12 @@ textarea:focus-visible {
   color: #111318;
 }
 
+.primary-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .next-button {
   border-color: rgba(142, 164, 199, 0.44);
   background: var(--blue);
@@ -413,6 +419,46 @@ textarea:focus-visible {
   max-width: 58rem;
   font-size: 1rem;
   line-height: 1.65;
+}
+
+.task-brief {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(244, 241, 232, 0.035);
+  padding: 0.75rem;
+}
+
+.task-brief[hidden] {
+  display: none;
+}
+
+.brief-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.brief-row span {
+  color: var(--amber-strong);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.brief-row p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.brief-row code {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.88em;
 }
 
 .stat-grid {
@@ -1036,6 +1082,93 @@ textarea:focus-visible {
   display: grid;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.theory-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.65rem;
+}
+
+.theory-topic-button,
+.theory-subtopic-button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control);
+  color: var(--ink);
+  text-align: left;
+}
+
+.theory-topic-button {
+  min-height: 5rem;
+  padding: 0.85rem;
+}
+
+.theory-topic-button span,
+.theory-topic-button strong {
+  display: block;
+}
+
+.theory-topic-button span {
+  color: var(--amber-strong);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.theory-topic-button strong {
+  margin-top: 0.35rem;
+  line-height: 1.2;
+}
+
+.theory-topic-button.is-active,
+.theory-subtopic-button.is-active {
+  border-color: rgba(199, 167, 106, 0.52);
+  background: var(--panel-strong);
+}
+
+.theory-panel {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  gap: 0.9rem;
+}
+
+.theory-subtopic-grid {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+
+.theory-subtopic-button {
+  padding: 0.72rem 0.8rem;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.theory-reader {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--code-soft);
+  padding: 1rem;
+}
+
+.theory-reader-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.theory-reader h3,
+.theory-reader p {
+  margin: 0;
+}
+
+.theory-reader p {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .theory-chapter {
@@ -2002,7 +2135,8 @@ body.focus-mode .screen-stack {
   }
 
   .theory-chapter-head,
-  .theory-card {
+  .theory-card,
+  .theory-panel {
     grid-template-columns: 1fr;
   }
 
@@ -2013,6 +2147,11 @@ body.focus-mode .screen-stack {
   .road-node {
     grid-template-columns: 3rem minmax(0, 1fr);
     padding: 0.9rem;
+  }
+
+  .brief-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 
   .fill-row {

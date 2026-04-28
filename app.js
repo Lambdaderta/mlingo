@@ -5,7 +5,7 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "0.1.11";
+const APP_VERSION = "0.1.12";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -27,7 +27,7 @@ const topics = [
     tag: "cv",
     icon: "CV",
     color: "#8ea4c7",
-    copy: "База для Cuties segmentation: PIL/OpenCV, RGB/BGR, resize, бинарные маски, bbox, IoU.",
+    copy: "PIL/OpenCV, RGB/BGR, resize, бинарные маски, bbox, IoU.",
     rules: ["Изображение resize: bilinear", "Маска resize: nearest", "OpenCV читает BGR, PIL читает RGB"],
     lessons: [
       {
@@ -104,7 +104,7 @@ const topics = [
         code: "inter = np.logical_and(a, b).sum()\nunion = np.logical_or(a, b).sum()\niou = inter / (____ + 1e-7)",
         blanks: ["union"],
         hint: "Intersection over union.",
-        explain: "В Cuties threshold и postprocess могут дать больше, чем замена модели.",
+        explain: "В segmentation threshold и postprocess часто дают прирост без изменения архитектуры.",
       },
       {
         id: "cv-threshold-sweep",
@@ -152,7 +152,7 @@ const topics = [
           "def mask_to_bbox(mask):\n    ys, xs = np.where(mask > 0)\n    if len(xs) == 0:\n        return None\n    return [xs.min(), ys.min(), xs.max(), ys.max()]",
         testsText: "Проверка: пустая маска -> None; прямоугольник -> min/max координаты.",
         hint: "`np.where` для 2D маски возвращает сначала y, потом x.",
-        explain: "Это уже ручной код, который пригодится в Cuties/Radar postprocess.",
+        explain: "Это ручной код для postprocess, crop и проверки разметки.",
       },
       {
         id: "cv-fix-resize-mask",
@@ -171,8 +171,8 @@ const topics = [
   },
   {
     id: "cv-segmentation",
-    title: "CV: segmentation contest",
-    track: "Cuties / Radar",
+    title: "CV: segmentation",
+    track: "Маски и postprocess",
     tag: "cv",
     icon: "SG",
     color: "#c7a76a",
@@ -294,7 +294,7 @@ const topics = [
           "        scores.append(iou_score(prob > t, y > 0.5))",
         ],
         hint: "Eval, no_grad, вероятности, threshold, метрика.",
-        explain: "Без честной валидации ты не поймёшь, помогает ли postprocess.",
+        explain: "Без честной валидации нельзя понять, помогает ли postprocess.",
       },
       {
         id: "seg-write-dice-score",
@@ -326,8 +326,8 @@ const topics = [
   },
   {
     id: "cv-detection-count",
-    title: "CV: bbox, counting, radar",
-    track: "Chicken counting / Radar",
+    title: "CV: bbox и counting",
+    track: "Counting / multi-channel",
     tag: "cv",
     icon: "BX",
     color: "#a98178",
@@ -387,12 +387,12 @@ const topics = [
       {
         id: "radar-channels",
         kind: "choice",
-        title: "Radar channels",
+        title: "Multi-channel input",
         prompt: "Если вход radar image имеет shape `[H,W,4]`, что нужно проверить первым?",
         options: ["что модель принимает 4 канала", "что target стал one-hot", "что batch_size равен 4", "что lr меньше 1e-6"],
         answer: "что модель принимает 4 канала",
         hint: "Conv2d первый аргумент `in_channels`.",
-        explain: "Частая ошибка CV-контестов: модель ждёт 3 канала, а данные несут другой набор каналов.",
+        explain: "Частая ошибка CV-пайплайна: модель ждёт 3 канала, а данные несут другой набор каналов.",
       },
       {
         id: "morph-open",
@@ -940,7 +940,7 @@ const topics = [
     tag: "torch",
     icon: "AR",
     color: "#8a97ac",
-    copy: "Свертки, attention, embeddings, diffusion/RL/recsys ровно в объёме, полезном для контестов.",
+    copy: "Свертки, attention, embeddings, diffusion/RL/recsys в прикладном объёме.",
     rules: ["Conv2d ждёт `[B,C,H,W]`", "Attention softmax по key dimension", "Embedding index dtype long"],
     lessons: [
       {
@@ -1557,7 +1557,7 @@ const extraLessonPacks = {
       answer:
         "prob1 = torch.sigmoid(model(x))\nprob2 = torch.sigmoid(model(torch.flip(x, dims=[3])))\nprob2 = torch.flip(prob2, dims=[3])\nprob = (prob1 + prob2) / 2",
       hint: "Flip по width axis нужно отменить на probability map.",
-      explain: "Иначе ты усредняешь маску в разных системах координат, и контуры размываются.",
+      explain: "Иначе маски усредняются в разных системах координат, и контуры размываются.",
       difficulty: 4,
     },
     {
@@ -3144,10 +3144,10 @@ for (const [topicId, lessons] of Object.entries(curatedContestLessonPack)) {
 }
 
 const practiceSets = [
-  { title: "Cuties Mini", copy: "image+mask Dataset, nearest resize, IoU, threshold sweep." },
-  { title: "Radar Shapes", copy: "Проверить входные каналы, logits и target для segmentation." },
-  { title: "Chicken Count", copy: "Density map, count как сумма, MAE по числу объектов." },
-  { title: "OOF Table Sprint", copy: "Stratified split, target encoding без leakage, CatBoost submit." },
+  { title: "Segmentation", copy: "image+mask Dataset, nearest resize, IoU, threshold sweep." },
+  { title: "Multi-channel CV", copy: "Входные каналы, logits и target для segmentation." },
+  { title: "Counting", copy: "Density map, count как сумма, MAE по числу объектов." },
+  { title: "OOF Table", copy: "Stratified split, target encoding без leakage, CatBoost." },
   { title: "Recsys Rerank", copy: "Candidates → features → ranker groups → top-K metrics." },
 ];
 
@@ -3166,21 +3166,21 @@ const theoryChapters = [
   {
     id: "start",
     level: "0. Старт",
-    title: "Как не тонуть в ML-коде",
-    subtitle: "Перед моделью всегда проверь форму данных, dtype и честную валидацию. Это скучно, но именно здесь чаще всего лежат быстрые баллы.",
+    title: "Данные и формат",
+    subtitle: "Базовый уровень: форма тензоров, типы данных и разделение train/validation.",
     diagram: "start",
     cards: [
       {
         title: "Shapes и dtype сначала",
-        body: "Смотри на тензор до forward. Если размерность или dtype не те, модель может обучаться мусором и не упасть с ошибкой.",
-        bullets: ["Images в torch обычно `[B,C,H,W]`.", "Targets для CE — `long`, для BCE — `float`.", "Любой reshape проверяй через assert."],
+        body: "`shape` — размеры массива или тензора. `dtype` — тип значений внутри него. Эти два поля определяют, подходит ли объект для модели и loss-функции.",
+        bullets: ["Images в torch обычно имеют форму `[B,C,H,W]`.", "Targets для CE — `long`, для BCE — `float`.", "После reshape/permute полезно ставить короткий assert."],
         code:
           "x = torch.randn(8, 3, 224, 224)\ny = torch.randint(0, 2, (8, 1, 224, 224)).float()\n\nassert x.ndim == 4 and x.shape[1] == 3\nassert y.dtype == torch.float32\nassert x.device == y.device",
       },
       {
         title: "Валидация до идей",
-        body: "Если validation нет, ты не знаешь, улучшил решение или просто угадал public leaderboard. Сначала делай маленький split, потом уже усложняй.",
-        bullets: ["Classification: stratified split.", "Time/recsys: split по времени.", "Leakage-фичи считай только внутри train fold."],
+        body: "Validation — часть обучающих данных, отложенная для проверки качества. Она должна повторять будущий сценарий применения модели.",
+        bullets: ["Classification: stratified split.", "Time/recsys: split по времени.", "Статистики признаков считаются только на train-части fold."],
         code:
           "from sklearn.model_selection import StratifiedKFold\n\nskf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\nfor fold, (tr_idx, va_idx) in enumerate(skf.split(df, df['target'])):\n    train_df = df.iloc[tr_idx].copy()\n    val_df = df.iloc[va_idx].copy()\n    break",
       },
@@ -3190,19 +3190,19 @@ const theoryChapters = [
     id: "torch",
     level: "1. PyTorch",
     title: "Dataset, loader, training loop",
-    subtitle: "Это база для любой CV/DL задачи. Сначала сделай минимальный pipeline, который честно overfit-ится на маленьком batch.",
+    subtitle: "Базовые компоненты обучения модели в PyTorch.",
     diagram: "segmentation",
     cards: [
       {
         title: "Dataset возвращает готовые tensors",
-        body: "Dataset должен отвечать за чтение и преобразование одного примера. Loader только собирает batch.",
-        bullets: ["В `__getitem__` не обучай модель и не считай метрики.", "Spatial transforms для image/mask должны быть синхронны.", "Для detection нужен кастомный `collate_fn`."],
+        body: "`Dataset` возвращает один пример по индексу. `DataLoader` собирает несколько примеров в batch.",
+        bullets: ["В `__getitem__` обычно выполняются чтение и transforms.", "Spatial transforms для image/mask должны быть синхронны.", "Для переменного числа объектов нужен кастомный `collate_fn`."],
         code:
           "class MaskDataset(torch.utils.data.Dataset):\n    def __init__(self, img_paths, mask_paths, transform=None):\n        self.img_paths = img_paths\n        self.mask_paths = mask_paths\n        self.transform = transform\n\n    def __getitem__(self, idx):\n        img = Image.open(self.img_paths[idx]).convert('RGB')\n        mask = Image.open(self.mask_paths[idx]).convert('L')\n        if self.transform:\n            img, mask = self.transform(img, mask)\n        return img, mask\n\n    def __len__(self):\n        return len(self.img_paths)",
       },
       {
         title: "Правильный train step",
-        body: "Порядок важен концептуально: очистили старые градиенты, посчитали forward/loss, сделали backward, обновили веса.",
+        body: "Одна итерация обучения состоит из forward, расчёта loss, backward и обновления весов.",
         bullets: ["`zero_grad` можно делать в начале итерации или после `step`, но не забывать.", "`model.train()` для обучения.", "`model.eval()` и `no_grad` для валидации."],
         code:
           "model.train()\nfor x, y in loader:\n    x = x.to(device)\n    y = y.to(device)\n\n    optimizer.zero_grad()\n    logits = model(x)\n    loss = criterion(logits, y)\n    loss.backward()\n    optimizer.step()",
@@ -3213,19 +3213,19 @@ const theoryChapters = [
     id: "cv-preprocess",
     level: "2. CV preprocessing",
     title: "Изображения, маски, bbox",
-    subtitle: "CV-задачи часто проигрываются не архитектурой, а resize, каналами и неверным форматом bbox.",
+    subtitle: "Чтение изображений, преобразование каналов, маски и bounding boxes.",
     diagram: "detection",
     cards: [
       {
         title: "PIL/OpenCV и порядок каналов",
-        body: "PIL читает RGB, OpenCV читает BGR. Если перепутать, модель видит другой цветовой мир.",
-        bullets: ["Image нормализуй в float.", "Torch ждёт `[C,H,W]`, не `[H,W,C]`.", "Маску не нормализуй как RGB-картинку."],
+        body: "PIL возвращает RGB, OpenCV возвращает BGR. Перед подачей в модель данные обычно переводятся в float tensor.",
+        bullets: ["Image часто нормализуется в диапазон `[0,1]`.", "Torch-модели обычно принимают `[C,H,W]` для одного изображения.", "Маска хранит классы или 0/1, её не обрабатывают как RGB-картинку."],
         code:
           "img = cv2.imread(path)\nimg = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)\nimg = img.astype(np.float32) / 255.0\nimg = torch.from_numpy(img).permute(2, 0, 1)",
       },
       {
         title: "Resize image и mask разными способами",
-        body: "Картинку можно сглаживать, но mask содержит class ids. Bilinear превратит классы в дробную кашу.",
+        body: "Изображение содержит непрерывные цвета, а mask содержит дискретные class ids. Поэтому resize у них разный.",
         bullets: ["Image: bilinear/bicubic.", "Mask: nearest.", "Bbox после resize масштабируй по x/y отдельно."],
         code:
           "img = TF.resize(img, (224, 224), interpolation=InterpolationMode.BILINEAR)\nmask = TF.resize(mask, (224, 224), interpolation=InterpolationMode.NEAREST)\n\nmask = torch.from_numpy(np.array(mask) > 0)[None].float()",
@@ -3236,19 +3236,19 @@ const theoryChapters = [
     id: "segmentation",
     level: "3. Segmentation",
     title: "Logits, masks, Dice/IoU",
-    subtitle: "Для Cuties/Radar сначала добейся честного binary pipeline: loss на logits, метрики на thresholded mask, postprocess отдельно.",
+    subtitle: "Бинарная и многоклассовая сегментация: выход модели, loss и метрики.",
     diagram: "segmentation",
     cards: [
       {
         title: "BCE + Dice для binary mask",
-        body: "BCE учит пиксели независимо, Dice добавляет давление на форму объекта. Sigmoid нужен внутри Dice, но не перед BCEWithLogits.",
+        body: "`BCEWithLogitsLoss` принимает сырые logits. Dice обычно считается уже по вероятностям или бинарной маске.",
         bullets: ["`logits`: `[B,1,H,W]`.", "`target`: `[B,1,H,W]` float.", "Threshold подбирается на validation."],
         code:
           "def dice_score(prob, target, eps=1e-6):\n    inter = (prob * target).sum(dim=(1, 2, 3))\n    denom = prob.sum(dim=(1, 2, 3)) + target.sum(dim=(1, 2, 3))\n    return ((2 * inter + eps) / (denom + eps)).mean()\n\nbce = F.binary_cross_entropy_with_logits(logits, target)\nprob = torch.sigmoid(logits)\nloss = bce + (1 - dice_score(prob, target))",
       },
       {
         title: "Threshold sweep",
-        body: "0.5 не обязан быть лучшим. На маленькой сегментации sweep threshold часто даёт больше, чем новая голова.",
+        body: "Threshold переводит probability в бинарную маску. Значение 0.5 является обычным стартом, но не математической обязанностью.",
         bullets: ["Подбирай threshold только на validation.", "Сохраняй лучший threshold для test.", "Largest component убирает шум, но может вредить нескольким объектам."],
         code:
           "best_t, best_iou = 0.5, -1\nfor t in np.linspace(0.1, 0.9, 17):\n    pred = (val_prob > t).astype(np.uint8)\n    score = mean_iou(pred, val_masks)\n    if score > best_iou:\n        best_t, best_iou = t, score",
@@ -3259,12 +3259,12 @@ const theoryChapters = [
     id: "detection",
     level: "4. Detection",
     title: "DETR targets и relation rows",
-    subtitle: "DETR учит объекты, а не отношения. Если в датасете subject/object/predicate, сначала собери уникальные объекты, потом отдельно predicate.",
+    subtitle: "Object detection: форматы bbox, target-структуры и batch с разным числом объектов.",
     diagram: "detr",
     cards: [
       {
         title: "Relation row → objects",
-        body: "Одна строка relation dataset может содержать два объекта. Для детектора нужно превратить все строки одного image_id в список уникальных boxes/classes.",
+        body: "В relation dataset одна строка может описывать пару объектов. Для object detection требуется список отдельных объектов на изображение.",
         bullets: ["Не дублируй одинаковый subject из нескольких predicates.", "`xyxy` часто нужно конвертировать в `cxcywh`.", "Labels должны быть integer ids."],
         code:
           "objects = []\nfor row in rows_for_image:\n    objects.append((row.subject_label, [row.subject_x1, row.subject_y1, row.subject_x2, row.subject_y2]))\n    objects.append((row.object_label, [row.object_x1, row.object_y1, row.object_x2, row.object_y2]))\n\nobjects = list(dict.fromkeys(objects))  # simple dedup for exact matches",
@@ -3282,12 +3282,12 @@ const theoryChapters = [
     id: "relations-recsys",
     level: "5. Ranking",
     title: "Predicate classifier и reranking",
-    subtitle: "После детектора задача часто становится табличной: пары объектов, кандидаты, признаки, ранжирование.",
+    subtitle: "Задачи, где модель выбирает или сортирует пары, кандидаты и объекты.",
     diagram: "relation",
     cards: [
       {
         title: "Фичи для predicate",
-        body: "Если детекция отдельно, predicate можно учить CatBoost/LightGBM по геометрии пары и class labels.",
+        body: "Predicate classifier получает пару объектов и предсказывает тип отношения между ними.",
         bullets: ["Площади и центры bbox.", "IoU и относительное положение.", "Subject/object label ids."],
         code:
           "def pair_features(s_box, o_box, s_label, o_label):\n    sx = (s_box[0] + s_box[2]) / 2\n    sy = (s_box[1] + s_box[3]) / 2\n    ox = (o_box[0] + o_box[2]) / 2\n    oy = (o_box[1] + o_box[3]) / 2\n    return {\n        's_label': s_label,\n        'o_label': o_label,\n        'dx': ox - sx,\n        'dy': oy - sy,\n        'iou': bbox_iou(s_box, o_box),\n    }",
@@ -3305,7 +3305,7 @@ const theoryChapters = [
     id: "advanced-dl",
     level: "6. Advanced DL",
     title: "Transformers и diffusion без магии",
-    subtitle: "На олимпиадах обычно роляет не огромная модель, а понимание tensor shapes, mask и training target.",
+    subtitle: "Основные вычислительные идеи attention и diffusion training.",
     diagram: "diffusion",
     cards: [
       {
@@ -3343,7 +3343,7 @@ const glossary = [
     aliases: ["dice"],
     body: "Метрика похожести двух масок. Она смотрит, насколько сильно пересекаются predicted mask и true mask.",
     formula: "Dice = 2 * intersection / (pred_area + true_area)",
-    contest: "Часто полезнее accuracy в segmentation, потому что фон огромный, а объект маленький.",
+    contest: "Часто полезнее accuracy в segmentation, потому что фон может доминировать над объектом.",
   },
   {
     key: "iou",
@@ -3351,7 +3351,7 @@ const glossary = [
     aliases: ["iou", "intersection over union"],
     body: "Метрика overlap: какую долю объединения двух масок занимает их пересечение.",
     formula: "IoU = intersection / union",
-    contest: "В CV threshold и postprocess обычно подбирают именно по IoU/Dice на validation.",
+    contest: "В CV threshold и postprocess обычно подбирают по IoU/Dice на validation.",
   },
   {
     key: "logits",
@@ -3383,7 +3383,7 @@ const glossary = [
     aliases: ["threshold", "порог"],
     body: "Число, которым probability превращается в 0/1 prediction.",
     formula: "mask = prob > threshold",
-    contest: "0.5 не святой. Для F1/Dice/IoU порог часто подбирают на validation.",
+    contest: "Для F1/Dice/IoU порог часто подбирают на validation.",
   },
   {
     key: "mask",
@@ -3399,7 +3399,7 @@ const glossary = [
     aliases: ["bbox", "bounding box"],
     body: "Прямоугольник вокруг объекта, обычно `[x1, y1, x2, y2]`.",
     formula: "x идет по ширине, y идет по высоте",
-    contest: "`np.where(mask)` возвращает сначала y, потом x. Это частая ловушка.",
+    contest: "`np.where(mask)` возвращает сначала y, потом x.",
   },
   {
     key: "connected_components",
@@ -3535,6 +3535,8 @@ let state = loadState();
 let currentTopicId = state.currentTopicId || topics[0].id;
 let currentLessonIndex = state.currentLessonIndex || 0;
 let currentScreen = state.currentScreen || "roadmap";
+let currentTheoryId = state.currentTheoryId || theoryChapters[0].id;
+let currentTheoryArticleIndex = state.currentTheoryArticleIndex || 0;
 const requestedScreen = new URLSearchParams(window.location.search).get("screen");
 if (["roadmap", "lesson", "profile", "library"].includes(requestedScreen)) currentScreen = requestedScreen;
 let selectedBlocks = [];
@@ -3581,10 +3583,12 @@ function cacheElements() {
     "lessonTitle",
     "lessonType",
     "lessonPrompt",
+    "lessonBrief",
     "lessonTerms",
     "challengeHost",
     "hintButton",
     "resetButton",
+    "prevButton",
     "checkButton",
     "nextButton",
     "feedbackBox",
@@ -3634,6 +3638,7 @@ function cacheElements() {
     "packImportButton",
     "packImportInput",
     "packSyncButton",
+    "packSyncShortcutButton",
     "packSourceInput",
     "packStatus",
     "appVersionBadge",
@@ -3667,6 +3672,7 @@ function bindEvents() {
   els.challengeHost.addEventListener("click", handleChallengeClick);
   els.hintButton.addEventListener("click", showHint);
   els.resetButton.addEventListener("click", renderLesson);
+  els.prevButton?.addEventListener("click", previousLesson);
   els.checkButton.addEventListener("click", checkAnswer);
   els.nextButton.addEventListener("click", nextLesson);
   els.dailyButton.addEventListener("click", startDaily);
@@ -3705,10 +3711,12 @@ function bindEvents() {
   els.githubProgressPullButton?.addEventListener("click", pullProgressFromGithubDirect);
   els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
   els.checkUpdatesButton?.addEventListener("click", checkForUpdates);
+  els.theoryGrid?.addEventListener("click", handleTheoryClick);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
   els.packImportButton?.addEventListener("click", () => els.packImportInput?.click());
   els.packImportInput?.addEventListener("change", importLessonPackFromFile);
   els.packSyncButton?.addEventListener("click", syncLessonPacksFromGithub);
+  els.packSyncShortcutButton?.addEventListener("click", syncLessonPacksFromGithub);
   els.packSourceInput?.addEventListener("change", () => {
     const value = els.packSourceInput.value.trim();
     if (value) localStorage.setItem(PACK_SOURCE_STORAGE_KEY, value);
@@ -3833,6 +3841,8 @@ function renderLesson() {
   els.lessonTitle.textContent = lesson.title;
   els.lessonType.textContent = lessonLabels[lesson.kind];
   els.lessonPrompt.textContent = lesson.prompt;
+  if (els.prevButton) els.prevButton.disabled = !findPreviousLesson();
+  renderLessonBrief(lesson);
   renderLessonTerms(lesson);
   els.feedbackBox.hidden = true;
   els.feedbackBox.className = "feedback";
@@ -3844,6 +3854,91 @@ function renderLesson() {
   if (lesson.kind === "fix") renderCodeWrite(lesson, "Исправь код здесь");
   if (lesson.kind === "write") renderCodeWrite(lesson, "Напиши решение здесь");
   if (lesson.kind === "idea") renderIdea(lesson);
+}
+
+function renderLessonBrief(lesson) {
+  if (!els.lessonBrief) return;
+  const brief = buildLessonBrief(lesson);
+  const rows = [
+    ["Дано", brief.input],
+    ["Нужно", brief.output],
+    ["Пример", brief.example],
+    ["Проверка", brief.check],
+  ].filter(([, value]) => value);
+
+  if (!rows.length) {
+    els.lessonBrief.hidden = true;
+    els.lessonBrief.innerHTML = "";
+    return;
+  }
+
+  els.lessonBrief.hidden = false;
+  els.lessonBrief.innerHTML = rows
+    .map(
+      ([label, value]) => `
+        <div class="brief-row">
+          <span>${label}</span>
+          <p>${formatBriefValue(value)}</p>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function buildLessonBrief(lesson) {
+  return {
+    input: lesson.input || inferLessonInput(lesson),
+    output: lesson.output || inferLessonOutput(lesson),
+    example: lesson.example || inferLessonExample(lesson),
+    check: lesson.check || lesson.testsText || inferLessonCheck(lesson),
+  };
+}
+
+function inferLessonInput(lesson) {
+  if (lesson.kind === "order") return "Перемешанные строки кода из банка блоков.";
+  if (lesson.kind === "fill") return "Фрагмент кода с пропуском `____`.";
+  if (lesson.kind === "choice") return "Вопрос и несколько вариантов ответа.";
+  if (lesson.kind === "bug") return "Нумерованный фрагмент кода.";
+  if (lesson.kind === "fix") return "Код в редакторе, где уже есть ошибка.";
+  if (lesson.kind === "write") return lesson.starter ? `Функция: \`${lesson.starter}\`` : "Сигнатура функции и короткий контракт.";
+  if (lesson.kind === "idea") return "Контестная ситуация без единственного синтаксического ответа.";
+  return "";
+}
+
+function inferLessonOutput(lesson) {
+  if (lesson.kind === "order") return "Рабочий порядок строк сверху вниз.";
+  if (lesson.kind === "fill") return "Выражение или значение, которое надо поставить вместо `____`.";
+  if (lesson.kind === "choice") return "Один лучший вариант.";
+  if (lesson.kind === "bug") return "Номер строки, где находится главная ошибка.";
+  if (lesson.kind === "fix") return "Исправленная версия кода.";
+  if (lesson.kind === "write") return "Полная реализация функции на Python.";
+  if (lesson.kind === "idea") return "Короткий план решения с ключевыми проверками.";
+  return "";
+}
+
+function inferLessonExample(lesson) {
+  if (lesson.kind === "choice" && lesson.options?.length) return `Выбери один вариант из ${lesson.options.length}.`;
+  if (lesson.kind === "order" && lesson.answer?.length) return `Итог должен состоять из ${lesson.answer.length} строк.`;
+  if (lesson.kind === "fill" && lesson.blanks?.length) return lesson.blanks.length === 1 ? "Впиши один фрагмент вместо `____`." : `Заполни ${lesson.blanks.length} пропуска.`;
+  if (lesson.kind === "fix") return "Измени только строки, которые ломают контракт.";
+  if (lesson.kind === "write") return "Сохрани сигнатуру функции из starter.";
+  if (lesson.kind === "bug") return "Нумерация строк начинается с 1 на экране.";
+  return "";
+}
+
+function inferLessonCheck(lesson) {
+  if (lesson.kind === "choice") return "Ответ должен совпасть с контрактом задачи, а не просто звучать знакомо.";
+  if (lesson.kind === "order") return "Код должен выполняться в этом порядке без скрытых перестановок.";
+  if (lesson.kind === "bug") return "Выбери строку с причиной бага, а не строку, где ошибка проявится позже.";
+  return "";
+}
+
+function formatBriefValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => `<code>${escapeHtml(String(item))}</code>`).join(" ");
+  }
+  const escaped = escapeHtml(String(value));
+  return escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
 function renderOrder(lesson) {
@@ -4070,7 +4165,7 @@ function buildHintText(lesson) {
         .map((term) => {
           const lines = [`${term.title}: ${term.body}`];
           if (term.formula) lines.push(`Формула/shape: ${term.formula}`);
-          if (term.contest) lines.push(`Зачем на контесте: ${term.contest}`);
+          if (term.contest) lines.push(`Практическая роль: ${term.contest}`);
           return lines.join("\n");
         })
         .join("\n\n")}`,
@@ -4101,14 +4196,14 @@ function buildMistakeText(lesson) {
 
 function describeCurrentAttempt(lesson) {
   if (lesson.kind === "choice") {
-    return selectedOption ? `Ты выбрал: ${selectedOption}.` : "Ты пока не выбрал вариант.";
+    return selectedOption ? `Выбран вариант: ${selectedOption}.` : "Вариант пока не выбран.";
   }
   if (lesson.kind === "bug") {
-    return selectedBugLine === null ? "Ты пока не выбрал строку." : `Ты выбрал строку ${selectedBugLine + 1}.`;
+    return selectedBugLine === null ? "Строка пока не выбрана." : `Выбрана строка ${selectedBugLine + 1}.`;
   }
   if (lesson.kind === "order") {
-    if (!selectedBlocks.length) return "Ты пока не собрал ни одной строки.";
-    return `Сейчас твоя цепочка по смыслу:\n${selectedBlocks.map((line, index) => `${index + 1}. ${lineConcept(line)}`).join("\n")}`;
+    if (!selectedBlocks.length) return "Цепочка пока пустая.";
+    return `Текущая цепочка по смыслу:\n${selectedBlocks.map((line, index) => `${index + 1}. ${lineConcept(line)}`).join("\n")}`;
   }
   if (lesson.kind === "fill") {
     const wrong = lesson.blanks
@@ -4122,12 +4217,12 @@ function describeCurrentAttempt(lesson) {
   }
   if (lesson.kind === "fix" || lesson.kind === "write") {
     const lines = splitUsefulLines(typedCode);
-    return lines.length ? `В твоём коде сейчас ${lines.length} непустых строк. Сравниваю по смысловым действиям, а не просто по общей идее.` : "Код пока пустой.";
+    return lines.length ? `В коде сейчас ${lines.length} непустых строк. Проверяются смысловые действия, а не только общая идея.` : "Код пока пустой.";
   }
   if (lesson.kind === "idea") {
     const text = document.getElementById("ideaAnswer")?.value || "";
     const words = text.trim().split(/\s+/).filter(Boolean).length;
-    return words ? `Ты написал примерно ${words} слов. Я проверяю не стиль, а наличие ключевых решений из рубрики.` : "План пока пустой.";
+    return words ? `В плане примерно ${words} слов. Проверяется не стиль, а наличие ключевых решений из рубрики.` : "План пока пустой.";
   }
   return "";
 }
@@ -4166,14 +4261,14 @@ function buildOrderMismatchHint(lesson) {
   const got = selectedBlocks[mismatchIndex];
   const expected = best[mismatchIndex];
   if (!got) return `Начни с действия: ${lineConcept(expected)}.`;
-  return `Первый разъезд на шаге ${mismatchIndex + 1}: у тебя там «${lineConcept(got)}», а в этой логике сначала нужно «${lineConcept(expected)}».`;
+  return `Первый разъезд на шаге ${mismatchIndex + 1}: сейчас там «${lineConcept(got)}», а в этой логике сначала нужно «${lineConcept(expected)}».`;
 }
 
 function buildChoiceMismatchHint(lesson) {
-  if (!selectedOption) return "Сначала выбери вариант, потом смотри, какую сущность реально принимает функция/метрика в условии.";
+  if (!selectedOption) return "Сначала выбрать вариант, затем проверить, какую сущность реально принимает функция/метрика в условии.";
   const selected = selectedOption.toLowerCase();
   if (selected.includes("sigmoid") || selected.includes("softmax") || selected.includes("argmax")) {
-    return "Ты выбрал вариант с преобразованием выхода модели. Проверь, спрашивают ли здесь loss/training или inference/metric: loss часто хочет logits, а probability/class id нужны позже.";
+    return "Выбран вариант с преобразованием выхода модели. Нужно различать loss/training и inference/metric: loss часто хочет logits, а probability/class id нужны позже.";
   }
   if (selected.includes("one-hot") || selected.includes("float") || selected.includes("long")) {
     return "Тут важно не название loss, а формат target: class indices обычно `long`, бинарные/регрессионные target обычно `float`.";
@@ -4211,7 +4306,7 @@ function buildCodeMismatchHint(lesson) {
     .map((line) => `не найдено действие: ${lineConcept(line)}`);
 
   const diffIndex = firstDifferentLineIndex(userLines, answerLines);
-  const diff = diffIndex === -1 ? "" : `Первый разъезд примерно на строке ${diffIndex + 1}: у тебя «${lineConcept(userLines[diffIndex] || "пусто")}», а нужно действие «${lineConcept(answerLines[diffIndex])}».`;
+  const diff = diffIndex === -1 ? "" : `Первый разъезд примерно на строке ${diffIndex + 1}: сейчас «${lineConcept(userLines[diffIndex] || "пусто")}», а нужно действие «${lineConcept(answerLines[diffIndex])}».`;
   const syntax = lesson.strictLines ? "Для этой задачи важны отступы, двоеточия после `for/if/with` и скобки у вызовов." : "";
   return [diff, missing.join("\n"), syntax].filter(Boolean).join("\n");
 }
@@ -4472,6 +4567,35 @@ function nextLesson() {
   setScreen("lesson");
 }
 
+function findPreviousLesson() {
+  const topic = getCurrentTopic();
+  const level = getUnlockedLevel(topic);
+  for (let index = currentLessonIndex - 1; index >= 0; index -= 1) {
+    if ((topic.lessons[index].difficulty || 1) <= level) return { topicId: topic.id, index };
+  }
+  const topicIndex = topics.findIndex((item) => item.id === topic.id);
+  for (let offset = 1; offset < topics.length; offset += 1) {
+    const prevTopic = topics[(topicIndex - offset + topics.length) % topics.length];
+    const prevLevel = getUnlockedLevel(prevTopic);
+    for (let index = prevTopic.lessons.length - 1; index >= 0; index -= 1) {
+      if ((prevTopic.lessons[index].difficulty || 1) <= prevLevel) return { topicId: prevTopic.id, index };
+    }
+  }
+  return null;
+}
+
+function previousLesson() {
+  const previous = findPreviousLesson();
+  if (!previous) return;
+  currentTopicId = previous.topicId;
+  currentLessonIndex = previous.index;
+  state.currentTopicId = currentTopicId;
+  state.currentLessonIndex = currentLessonIndex;
+  saveState();
+  renderAll();
+  setScreen("lesson");
+}
+
 function startDaily() {
   const flat = flatLessons();
   const seed = Number(todayKey().replaceAll("-", ""));
@@ -4498,7 +4622,7 @@ function renderSidebar() {
   els.dailyQuests.innerHTML = `
     <div class="quest-row"><span>Пройти 3 мини-урока</span><strong>${Math.min(doneToday, 3)}/3</strong></div>
     <div class="quest-row"><span>Сделать один CV-узел</span><strong>${completedInTopic(topics[0]) ? "ok" : "0/1"}</strong></div>
-    <div class="quest-row"><span>Не вайбкодить 10 минут</span><strong>ручной режим</strong></div>
+    <div class="quest-row"><span>Один ручной ответ</span><strong>код</strong></div>
   `;
   renderWeakList();
   renderQueueList();
@@ -4512,7 +4636,37 @@ function renderPracticeSets() {
 
 function renderLibrary() {
   if (els.theoryGrid) {
-    els.theoryGrid.innerHTML = theoryChapters.map(renderTheoryChapter).join("");
+    ensureTheorySelection();
+    const group = getCurrentTheoryGroup();
+    const article = group.cards[currentTheoryArticleIndex] || group.cards[0];
+    els.theoryGrid.innerHTML = `
+      <div class="theory-topic-grid" aria-label="Темы теории">
+        ${theoryChapters
+          .map(
+            (chapter) => `
+              <button class="theory-topic-button${chapter.id === currentTheoryId ? " is-active" : ""}" data-theory-id="${escapeHtml(chapter.id)}" type="button">
+                <span>${escapeHtml(chapter.level)}</span>
+                <strong>${escapeHtml(chapter.title)}</strong>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="theory-panel">
+        <div class="theory-subtopic-grid" aria-label="Подтемы">
+          ${group.cards
+            .map(
+              (card, index) => `
+                <button class="theory-subtopic-button${index === currentTheoryArticleIndex ? " is-active" : ""}" data-theory-article="${index}" type="button">
+                  ${escapeHtml(card.title)}
+                </button>
+              `,
+            )
+            .join("")}
+        </div>
+        ${renderTheoryArticle(group, article, currentTheoryArticleIndex)}
+      </div>
+    `;
   }
   if (els.libraryGrid) {
     els.libraryGrid.innerHTML = libraryCards
@@ -4526,34 +4680,52 @@ function renderLibrary() {
   renderGithubIntegration();
 }
 
-function renderTheoryChapter(chapter) {
-  return `
-    <section class="theory-chapter" id="theory-${escapeHtml(chapter.id)}">
-      <div class="theory-chapter-head">
-        <div class="theory-step">${escapeHtml(chapter.level)}</div>
-        <div class="theory-chapter-copy">
-          <h3>${escapeHtml(chapter.title)}</h3>
-          <p>${escapeHtml(chapter.subtitle)}</p>
-        </div>
-        ${renderTheoryDiagram(chapter.diagram)}
-      </div>
-      <div class="theory-card-list">
-        ${chapter.cards.map(renderTheoryCard).join("")}
-      </div>
-    </section>
-  `;
+function ensureTheorySelection() {
+  if (!theoryChapters.some((chapter) => chapter.id === currentTheoryId)) {
+    currentTheoryId = theoryChapters[0].id;
+    currentTheoryArticleIndex = 0;
+  }
+  const group = getCurrentTheoryGroup();
+  if (!group.cards[currentTheoryArticleIndex]) currentTheoryArticleIndex = 0;
 }
 
-function renderTheoryCard(card, index) {
+function getCurrentTheoryGroup() {
+  return theoryChapters.find((chapter) => chapter.id === currentTheoryId) || theoryChapters[0];
+}
+
+function handleTheoryClick(event) {
+  const topicButton = event.target.closest("[data-theory-id]");
+  if (topicButton) {
+    currentTheoryId = topicButton.dataset.theoryId;
+    currentTheoryArticleIndex = 0;
+    state.currentTheoryId = currentTheoryId;
+    state.currentTheoryArticleIndex = currentTheoryArticleIndex;
+    saveState();
+    renderLibrary();
+    return;
+  }
+
+  const articleButton = event.target.closest("[data-theory-article]");
+  if (articleButton) {
+    currentTheoryArticleIndex = Number(articleButton.dataset.theoryArticle);
+    state.currentTheoryId = currentTheoryId;
+    state.currentTheoryArticleIndex = currentTheoryArticleIndex;
+    saveState();
+    renderLibrary();
+  }
+}
+
+function renderTheoryArticle(group, card, index) {
   return `
-    <article class="theory-card">
-      <div class="theory-card-head">
-        <span class="theory-card-number">${index + 1}</span>
+    <article class="theory-reader">
+      <div class="theory-reader-head">
         <div>
-          <h4>${escapeHtml(card.title)}</h4>
-          <p>${escapeHtml(card.body)}</p>
+          <span class="eyebrow">${escapeHtml(group.level)}</span>
+          <h3>${escapeHtml(card.title)}</h3>
         </div>
+        <span class="lesson-type">${index + 1} / ${group.cards.length}</span>
       </div>
+      <p>${escapeHtml(card.body)}</p>
       <ul class="theory-points">
         ${card.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
@@ -5219,9 +5391,9 @@ async function pullProgressFromGithubDirect() {
 function buildDirectSolutionMarkdown(lesson, topic, answer) {
   const checklist = (lesson.rubric || []).map((item) => item.label).filter(Boolean);
   const fallback = [
-    "Проверь validation и отсутствие leakage.",
-    "Проверь shape/dtype/device контракты.",
-    "Проверь читаемость и воспроизводимость.",
+    "Validation: какой split использован и нет ли leakage.",
+    "Контракт данных: входные shapes, dtype, device, формат target.",
+    "Воспроизводимость: seed, версии, порядок строк в submission.",
   ];
   const language = lesson.kind === "idea" ? "markdown" : "python";
   const fence = answer.includes("```") ? "````" : "```";
@@ -5302,7 +5474,7 @@ async function checkForUpdates() {
     els.updateStatus.className = `feedback pack-status ${newer ? "is-good" : ""}`;
     els.updateStatus.innerHTML = newer
       ? `Доступна версия v${escapeHtml(latest)}. ${links.join(" · ") || `<a href="${escapeHtml(release.html_url)}" target="_blank" rel="noreferrer">Открыть Release</a>`}`
-      : `У тебя актуальная версия v${APP_VERSION}. Последний release: v${escapeHtml(latest || APP_VERSION)}.`;
+      : `Текущая версия v${APP_VERSION}. Последний release: v${escapeHtml(latest || APP_VERSION)}.`;
   } catch (error) {
     els.updateStatus.className = "feedback pack-status is-bad";
     els.updateStatus.textContent = `Не смог проверить обновления: ${error.message}`;

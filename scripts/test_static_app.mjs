@@ -33,6 +33,7 @@ const packIndex = readJson("lesson-packs/index.json");
 assert.ok(html.includes('lang="ru"'), "index.html should declare Russian UI language");
 assert.ok(html.includes('id="packSourceInput"'), "index.html should include GitHub pack source input");
 assert.ok(html.includes('id="packSyncButton"'), "index.html should include GitHub pack sync button");
+assert.ok(html.includes('id="packSyncShortcutButton"'), "index.html should include profile pack sync shortcut");
 assert.ok(html.includes('id="packExportButton"'), "index.html should include pack export button");
 assert.ok(html.includes('id="packImportButton"'), "index.html should include pack import button");
 assert.ok(html.includes('id="githubLoginButton"'), "index.html should include GitHub login button");
@@ -47,6 +48,8 @@ assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include u
 assert.ok(html.includes('id="guideModal"'), "index.html should include welcome guide modal");
 assert.ok(html.includes('id="guideButton"'), "index.html should include guide reopen button");
 assert.ok(html.includes('id="theoryGrid"'), "index.html should include theory reading grid");
+assert.ok(html.includes('id="lessonBrief"'), "index.html should include lesson input/output brief");
+assert.ok(html.includes('id="prevButton"'), "index.html should include previous lesson button");
 assert.ok(html.includes('class="settings-panel"'), "index.html should include profile settings panel");
 assert.ok(html.indexOf('class="settings-panel"') < html.indexOf('id="guideButton"'), "guide reopen button should live in settings/profile, not topbar");
 assert.ok(html.includes("./assets/brand/mlingo-cat-logo-512.png"), "index.html should use the MLingo cat logo in the app shell");
@@ -94,7 +97,10 @@ assert.ok(app.includes("function renderGithubIntegration"), "app should render G
 assert.ok(app.includes("const GUIDE_SEEN_KEY"), "app should remember whether welcome guide was seen");
 assert.ok(app.includes("function maybeOpenGuide"), "app should open the welcome guide on first run");
 assert.ok(app.includes("const theoryChapters"), "app should include a structured built-in theory section");
-assert.ok(app.includes("function renderTheoryChapter"), "app should render theory by topic chapters");
+assert.ok(app.includes("function renderTheoryArticle"), "app should render selected theory articles");
+assert.ok(app.includes("function handleTheoryClick"), "app should switch theory topics and subtopics");
+assert.ok(app.includes("function renderLessonBrief"), "app should render task input/output/example/check brief");
+assert.ok(app.includes("function previousLesson"), "app should navigate to previous lessons");
 assert.ok(app.includes("theory-code"), "theory section should include implementation code examples");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");

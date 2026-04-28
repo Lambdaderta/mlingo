@@ -28,6 +28,10 @@ function validateCommonLesson(lesson, topicId, seenLessonIds) {
   assertString(lesson.hint, `${lesson.id}.hint`);
   assertString(lesson.explain, `${lesson.id}.explain`);
 
+  for (const field of ["input", "output", "example", "check"]) {
+    if (lesson[field] !== undefined) assertString(lesson[field], `${lesson.id}.${field}`);
+  }
+
   if (lesson.difficulty !== undefined) {
     assert.ok(Number.isInteger(lesson.difficulty), `${lesson.id}: difficulty must be integer`);
     assert.ok(lesson.difficulty >= 1 && lesson.difficulty <= 5, `${lesson.id}: difficulty must be 1..5`);

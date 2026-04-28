@@ -7,12 +7,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="MLingo" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>MLingo Антивайб</title>
+    <title>MLingo</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean21" />
-    <script defer src="./app.js?v=clean21"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean22" />
+    <script defer src="./app.js?v=clean22"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -21,7 +21,7 @@
           <span class="brand-mark"><img src="./assets/brand/mlingo-cat-logo-512.png" alt="" /></span>
           <span>
             <strong>MLingo</strong>
-            <small>антивайб-кодинг</small>
+            <small>ML practice</small>
           </span>
         </a>
         <div class="top-actions">
@@ -36,8 +36,8 @@
           <section class="profile-mini">
             <div class="avatar"><img src="./assets/brand/mlingo-cat-logo-512.png" alt="" /></div>
             <div>
-              <strong>Ручная практика</strong>
-              <small>NEOAI / IOAI prep</small>
+              <strong>Практика</strong>
+              <small>offline</small>
             </div>
           </section>
 
@@ -67,8 +67,7 @@
             <div class="mission-strip roadmap-hero">
               <div>
                 <span class="eyebrow" id="missionEyebrow">Сегодня</span>
-                <h1 id="missionTitle">Короткие ML-дриллы без автопилота</h1>
-                <p>Выбирай тему, проходи узлы дорожной карты и закрепляй рефлексы: shapes, masks, validation, loss, PyTorch loop.</p>
+                <h1 id="missionTitle">Карта</h1>
               </div>
               <div class="stat-grid">
                 <div class="stat-pill">
@@ -101,7 +100,7 @@
             <section class="review-panel">
               <div>
                 <span class="eyebrow">Практика</span>
-                <h3>20-минутные контест-повторы</h3>
+                <h3>Наборы</h3>
               </div>
               <div class="boss-grid" id="bossGrid"></div>
             </section>
@@ -118,12 +117,14 @@
               </div>
 
               <p class="prompt" id="lessonPrompt"></p>
+              <div class="task-brief" id="lessonBrief"></div>
               <div class="term-strip" id="lessonTerms"></div>
               <div class="challenge" id="challengeHost"></div>
 
               <div class="lesson-controls">
                 <button class="ghost-button" id="hintButton" type="button">Подсказка</button>
                 <button class="ghost-button" id="resetButton" type="button">Сброс</button>
+                <button class="ghost-button" id="prevButton" type="button">Назад</button>
                 <button class="primary-button" id="checkButton" type="button">Проверить</button>
                 <button class="primary-button next-button" id="nextButton" type="button">Дальше</button>
               </div>
@@ -137,8 +138,7 @@
                 <div class="avatar big"><img src="./assets/brand/mlingo-cat-logo-512.png" alt="" /></div>
                 <div>
                   <span class="eyebrow">Профиль</span>
-                  <h2>Неделя ручного ML-кода</h2>
-                  <p>Цель: чтобы `Dataset`, `training loop`, `IoU`, `target encoding` и `CatBoost baseline` писались без внутреннего сопротивления.</p>
+                  <h2>Профиль</h2>
                 </div>
               </div>
               <div class="profile-grid">
@@ -151,11 +151,11 @@
                 <div class="lesson-meta">
                   <div>
                     <span class="eyebrow">Настройки</span>
-                    <h3>Помощь и режимы</h3>
+                    <h3>Приложение</h3>
                   </div>
                 </div>
-                <p>Если дал приложение другу или хочешь быстро вспомнить механику, открой приветственный гайд заново отсюда.</p>
                 <div class="pack-actions">
+                  <button class="primary-button" id="packSyncShortcutButton" type="button">Обновить задания</button>
                   <button class="ghost-button" id="guideButton" type="button">Открыть гайд</button>
                 </div>
               </section>
@@ -166,12 +166,12 @@
                     <h3>GitHub</h3>
                   </div>
                 </div>
-                <p>Без сервера MLingo может хранить прогресс и решения прямо в твоём GitHub repo. Для этого нужен fine-grained token с доступом Contents: Read and write к одному репозиторию.</p>
+                <p>Прогресс и решения в GitHub.</p>
                 <div class="integration-status" id="githubIntegrationPanel">
                   <div class="integration-mark" id="githubIntegrationMark">GH</div>
                   <div>
                     <strong id="githubIntegrationTitle">GitHub не подключен</strong>
-                    <small id="githubIntegrationSubtitle">Сохрани локальный GitHub token или войди через backend OAuth позже.</small>
+                    <small id="githubIntegrationSubtitle">Token не сохранён.</small>
                   </div>
                   <div class="integration-actions">
                     <button class="primary-button" id="githubTokenSaveButton" type="button">Сохранить token</button>
@@ -199,12 +199,12 @@
                   <input id="githubRepoInput" value="mlingo-solutions" autocomplete="off" autocapitalize="off" spellcheck="false" />
                 </label>
                 <div class="integration-how">
-                  <strong>Как это будет работать</strong>
+                  <strong>Формат</strong>
                   <ul>
-                    <li id="githubRepoLine">Serverless mode создаст или использует <code>mlingo-solutions</code>.</li>
+                    <li id="githubRepoLine">Используется <code>mlingo-solutions</code>.</li>
                     <li>Прогресс сохраняется в <code>progress/mlingo-progress.json</code>.</li>
                     <li>После write/fix/idea задач решение пушится markdown-файлом в <code>solutions/</code>.</li>
-                    <li>Разборы и уведомления появятся позже, когда будет backend.</li>
+                    <li>Разборы решений будут отдельным серверным модулем.</li>
                   </ul>
                 </div>
                 <div class="auth-hint" id="githubIntegrationMessage"></div>
@@ -217,7 +217,7 @@
                   </div>
                   <span class="lesson-type" id="appVersionBadge">v0.1.1</span>
                 </div>
-                <p>Приложение проверяет GitHub Releases и показывает APK/macOS сборки, если вышла новая версия.</p>
+                <p>APK, DMG и web-релизы.</p>
                 <div class="pack-actions">
                   <button class="primary-button" id="checkUpdatesButton" type="button">Проверить обновления</button>
                   <a class="ghost-button link-button" id="releaseLink" href="https://github.com/Lambdaderta/mlingo/releases" target="_blank" rel="noreferrer">Открыть Releases</a>
@@ -238,27 +238,26 @@
 
           <section class="app-screen" id="screen-library">
             <article class="lesson-card">
-              <div class="lesson-meta">
-                <div>
-                  <span class="eyebrow">Теория</span>
-                  <h2>Мини-учебник от базы к сложным темам</h2>
+                <div class="lesson-meta">
+                  <div>
+                    <span class="eyebrow">Теория</span>
+                  <h2>Справочник</h2>
                 </div>
               </div>
               <div class="theory-grid" id="theoryGrid"></div>
-              <h3 class="section-title">Короткие правила</h3>
+              <h3 class="section-title">Правила</h3>
               <div class="library-grid" id="libraryGrid"></div>
               <section class="pack-tools">
                 <div>
                   <span class="eyebrow">Паки заданий</span>
-                  <h3>Оффлайн-банк можно обновлять отдельно</h3>
-                  <p>Держи задания в GitHub: приложение скачает index/pack JSON, сохранит локально и потом будет работать без сети.</p>
+                  <h3>Банк задач</h3>
                 </div>
                 <label class="pack-source">
                   <span>GitHub raw index URL</span>
                   <input id="packSourceInput" value="https://raw.githubusercontent.com/Lambdaderta/mlingo/main/lesson-packs/index.json" autocomplete="off" autocapitalize="off" spellcheck="false" />
                 </label>
                 <div class="pack-actions">
-                  <button class="primary-button" id="packSyncButton" type="button">Синк из GitHub</button>
+                  <button class="primary-button" id="packSyncButton" type="button">Обновить задания</button>
                   <button class="ghost-button" id="packExportButton" type="button">Экспорт банка</button>
                   <button class="ghost-button" id="packImportButton" type="button">Импорт pack JSON</button>
                   <input id="packImportInput" type="file" accept="application/json,.json" hidden />
@@ -318,7 +317,7 @@
             </div>
             <button class="ghost-button icon-button" id="authCloseButton" type="button" aria-label="Закрыть">×</button>
           </div>
-          <p class="prompt">Вход через GitHub пока опционален: можно тренироваться без аккаунта, а позже подключить синхронизацию прогресса и решений.</p>
+          <p class="prompt">GitHub-вход можно подключить позже.</p>
           <button class="github-auth-button" id="githubLoginButton" type="button">
             <span class="github-auth-mark">GH</span>
             <span>
@@ -342,7 +341,7 @@
             </div>
             <button class="ghost-button icon-button" id="guideCloseButton" type="button" aria-label="Закрыть">×</button>
           </div>
-          <p class="prompt">MLingo устроен как короткие дриллы: ты выбираешь тему, решаешь маленькие задачи руками и постепенно переходишь от блоков к настоящему коду.</p>
+          <p class="prompt">Основные экраны приложения.</p>
 
           <div class="guide-grid" aria-label="Приветственный гайд">
             <article class="guide-card">
@@ -357,8 +356,8 @@
                   </div>
                 </div>
               </div>
-              <h3>1. Выбери дорожную карту</h3>
-              <p>Слева темы и фильтры. Узлы идут по сложности: сначала формат и синтаксис, потом исправление кода и идеи.</p>
+              <h3>1. Карта</h3>
+              <p>Темы, фильтры и узлы сложности.</p>
             </article>
 
             <article class="guide-card">
@@ -367,8 +366,8 @@
                 <div class="shot-controls"><i></i><i></i><i></i></div>
                 <div class="shot-feedback"></div>
               </div>
-              <h3>2. Решай маленькими шагами</h3>
-              <p>Блоки можно собирать мышкой, в кодовых задачах работает Tab. Если ошибся, подсказка объяснит идею задачи.</p>
+              <h3>2. Урок</h3>
+              <p>Блоки, ввод кода, подсказки и проверка.</p>
             </article>
 
             <article class="guide-card">
@@ -378,8 +377,8 @@
                 <div class="shot-pack-buttons"><i></i><i></i></div>
                 <div class="shot-pack-list"><span></span><span></span><span></span></div>
               </div>
-              <h3>3. Подгружай новые задания</h3>
-              <p>В разделе теории есть импорт JSON и синхронизация из GitHub. Так банк задач обновляется без пересборки приложения.</p>
+              <h3>3. Банк задач</h3>
+              <p>Синхронизация из GitHub и импорт JSON.</p>
             </article>
 
             <article class="guide-card">
@@ -388,8 +387,8 @@
                 <div class="shot-gh-lines"><span></span><span></span><span></span></div>
                 <div class="shot-gh-ok"></div>
               </div>
-              <h3>4. Сохраняй прогресс</h3>
-              <p>Без аккаунта прогресс хранится локально. Позже можно подключить GitHub sync и складывать решения в свой repo.</p>
+              <h3>4. Прогресс</h3>
+              <p>Локальное сохранение, GitHub sync по token.</p>
             </article>
           </div>
 

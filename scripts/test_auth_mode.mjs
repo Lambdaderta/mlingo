@@ -21,7 +21,7 @@ const syncSource = app.slice(syncStart, syncEnd);
 assert.ok(app.includes("const AUTH_REQUIRED = false"), "practice should be available without registration for local/offline builds");
 assert.ok(app.includes("function enforceAuthGate"), "auth gate function should stay in place for easy hosted-mode re-enable");
 assert.ok(!html.includes("Вход обязателен"), "auth copy should not claim GitHub login is mandatory");
-assert.ok(html.includes("Вход через GitHub пока опционален"), "auth modal should explain optional GitHub login");
+assert.ok(html.includes("GitHub-вход можно подключить позже."), "auth modal should explain optional GitHub login");
 assert.ok(html.includes('id="githubLoginButton"'), "optional GitHub login button should remain available");
 assert.ok(app.includes('if (authResult === "github-error")'), "GitHub callback error branch should be handled");
 assert.ok(app.includes('showAuthStatus("GitHub не смог авторизовать вход. Попробуй еще раз.")'), "GitHub callback errors should show a user-facing message");
