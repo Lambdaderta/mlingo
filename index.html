@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean19" />
-    <script defer src="./app.js?v=clean19"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean20" />
+    <script defer src="./app.js?v=clean20"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -45,7 +45,7 @@
             <button class="nav-button is-active" data-screen="roadmap" type="button">Карта</button>
             <button class="nav-button" data-screen="lesson" type="button">Урок</button>
             <button class="nav-button" data-screen="profile" type="button">Профиль</button>
-            <button class="nav-button" data-screen="library" type="button">Шпаргалки</button>
+            <button class="nav-button" data-screen="library" type="button">Теория</button>
           </nav>
 
           <div class="rail-header">
@@ -147,6 +147,18 @@
                 <div class="profile-stat"><span>Пройдено</span><strong id="profileDone">0</strong></div>
                 <div class="profile-stat"><span>Ошибки</span><strong id="profileMisses">0</strong></div>
               </div>
+              <section class="settings-panel">
+                <div class="lesson-meta">
+                  <div>
+                    <span class="eyebrow">Настройки</span>
+                    <h3>Помощь и режимы</h3>
+                  </div>
+                </div>
+                <p>Если дал приложение другу или хочешь быстро вспомнить механику, открой приветственный гайд заново отсюда.</p>
+                <div class="pack-actions">
+                  <button class="ghost-button" id="guideButton" type="button">Открыть гайд</button>
+                </div>
+              </section>
               <section class="integration-panel">
                 <div class="lesson-meta">
                   <div>
@@ -228,10 +240,12 @@
             <article class="lesson-card">
               <div class="lesson-meta">
                 <div>
-                  <span class="eyebrow">Шпаргалки</span>
-                  <h2>Что держать в голове на контесте</h2>
+                  <span class="eyebrow">Теория</span>
+                  <h2>База, которую полезно держать рядом</h2>
                 </div>
               </div>
+              <div class="theory-grid" id="theoryGrid"></div>
+              <h3 class="section-title">Короткие правила</h3>
               <div class="library-grid" id="libraryGrid"></div>
               <section class="pack-tools">
                 <div>
@@ -292,7 +306,7 @@
         <button class="mobile-tab is-active" data-screen="roadmap" type="button">Карта</button>
         <button class="mobile-tab" data-screen="lesson" type="button">Урок</button>
         <button class="mobile-tab" data-screen="profile" type="button">Профиль</button>
-        <button class="mobile-tab" data-screen="library" type="button">База</button>
+        <button class="mobile-tab" data-screen="library" type="button">Теория</button>
       </nav>
 
       <div class="auth-modal" id="authModal" hidden>
@@ -316,6 +330,74 @@
             <button class="ghost-button" id="logoutButton" type="button">Выйти</button>
           </div>
           <div class="feedback auth-feedback" id="authStatus" hidden></div>
+        </div>
+      </div>
+
+      <div class="guide-modal" id="guideModal" hidden>
+        <div class="guide-panel" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+          <div class="lesson-meta">
+            <div>
+              <span class="eyebrow">Быстрый старт</span>
+              <h2 id="guideTitle">Как заниматься в MLingo</h2>
+            </div>
+            <button class="ghost-button icon-button" id="guideCloseButton" type="button" aria-label="Закрыть">×</button>
+          </div>
+          <p class="prompt">MLingo устроен как короткие дриллы: ты выбираешь тему, решаешь маленькие задачи руками и постепенно переходишь от блоков к настоящему коду.</p>
+
+          <div class="guide-grid" aria-label="Приветственный гайд">
+            <article class="guide-card">
+              <div class="guide-shot guide-shot-roadmap" aria-hidden="true">
+                <div class="shot-sidebar">
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="shot-main">
+                  <div class="shot-title"></div>
+                  <div class="shot-path">
+                    <i></i><i></i><i></i><i></i>
+                  </div>
+                </div>
+              </div>
+              <h3>1. Выбери дорожную карту</h3>
+              <p>Слева темы и фильтры. Узлы идут по сложности: сначала формат и синтаксис, потом исправление кода и идеи.</p>
+            </article>
+
+            <article class="guide-card">
+              <div class="guide-shot guide-shot-lesson" aria-hidden="true">
+                <div class="shot-code"><span></span><span></span><span></span></div>
+                <div class="shot-controls"><i></i><i></i><i></i></div>
+                <div class="shot-feedback"></div>
+              </div>
+              <h3>2. Решай маленькими шагами</h3>
+              <p>Блоки можно собирать мышкой, в кодовых задачах работает Tab. Если ошибся, подсказка объяснит идею задачи.</p>
+            </article>
+
+            <article class="guide-card">
+              <div class="guide-shot guide-shot-packs" aria-hidden="true">
+                <div class="shot-pack-line wide"></div>
+                <div class="shot-pack-line"></div>
+                <div class="shot-pack-buttons"><i></i><i></i></div>
+                <div class="shot-pack-list"><span></span><span></span><span></span></div>
+              </div>
+              <h3>3. Подгружай новые задания</h3>
+              <p>В разделе теории есть импорт JSON и синхронизация из GitHub. Так банк задач обновляется без пересборки приложения.</p>
+            </article>
+
+            <article class="guide-card">
+              <div class="guide-shot guide-shot-github" aria-hidden="true">
+                <div class="shot-gh-mark">GH</div>
+                <div class="shot-gh-lines"><span></span><span></span><span></span></div>
+                <div class="shot-gh-ok"></div>
+              </div>
+              <h3>4. Сохраняй прогресс</h3>
+              <p>Без аккаунта прогресс хранится локально. Позже можно подключить GitHub sync и складывать решения в свой repo.</p>
+            </article>
+          </div>
+
+          <div class="lesson-controls guide-actions">
+            <button class="primary-button" id="guideStartButton" type="button">Начать с карты</button>
+            <button class="ghost-button" id="guideLessonButton" type="button">Открыть урок</button>
+            <button class="ghost-button" id="guideLaterButton" type="button">Показать позже</button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "mlingo-clean-v19";
+const CACHE_NAME = "mlingo-clean-v20";
 const ASSETS = [
   "./",
   "./index.html",

@@ -4,7 +4,8 @@ const PACK_STORAGE_KEY = "mlingo.lesson.packs.v1";
 const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
-const APP_VERSION = "0.1.8";
+const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
+const APP_VERSION = "0.1.9";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
@@ -3161,6 +3162,81 @@ const libraryCards = [
   { title: "Ranker groups", text: "LGBM/CatBoost ranker получает group/query: обычно все candidate rows одного user." },
 ];
 
+const theoryCards = [
+  {
+    title: "Детекция: как читать датасет",
+    kicker: "bbox, class, image_id",
+    diagram: "detection",
+    body:
+      "В object detection строка аннотации описывает объект: его bbox и class. Если в одной строке лежат subject, object и predicate, это уже relation row: для DETR из неё обычно достают два объекта, а predicate обучают отдельной моделью по паре.",
+    bullets: [
+      "bbox часто бывает `xyxy`, COCO ждёт `xywh`.",
+      "В одном изображении много объектов, поэтому target хранит списки boxes и labels.",
+      "Дубликаты bbox из relation-строк нужно убирать, иначе модель увидит один объект несколько раз.",
+    ],
+  },
+  {
+    title: "DETR: что именно тюнить",
+    kicker: "queries + matching",
+    diagram: "detr",
+    body:
+      "DETR не предсказывает anchor boxes как YOLO. Он держит фиксированное число object queries, а Hungarian matching решает, какая query отвечает за какой target object. Остальные queries становятся no-object.",
+    bullets: [
+      "В Dataset возвращай `boxes` в нормализованном `cxcywh` или формате, который ждёт конкретная реализация.",
+      "Fine-tune обычно начинается с головы классов и bbox-head, потом можно разморозить последние слои.",
+      "Следи за `num_classes`: no-object часто добавляется внутри модели отдельно.",
+    ],
+  },
+  {
+    title: "Сегментация: logits → mask",
+    kicker: "BCE/Dice/IoU",
+    diagram: "segmentation",
+    body:
+      "Binary segmentation почти всегда выглядит как `logits [B,1,H,W]`, `target [B,1,H,W]`. Loss считает logits напрямую, а sigmoid и threshold нужны для метрик и сабмита.",
+    bullets: [
+      "`BCEWithLogitsLoss` уже содержит sigmoid внутри.",
+      "Dice помогает, когда фон огромный и модель ленится предсказывать объект.",
+      "Threshold, largest component и resize маски часто дают быстрый contest-буст.",
+    ],
+  },
+  {
+    title: "Реляции: predicate отдельно",
+    kicker: "детектор + табличный классификатор",
+    diagram: "relation",
+    body:
+      "Для visual relations удобно разделить задачу: DETR находит объекты, а CatBoost/LightGBM классифицирует predicate по признакам пары. Это проще валидировать и быстрее чинить в контесте.",
+    bullets: [
+      "Фичи пары: labels, площади, IoU, расстояние центров, относительное положение.",
+      "На train можно брать true boxes, на inference пары строятся из предсказанных boxes.",
+      "Валидация должна совпадать с inference-сценарием, иначе score будет слишком оптимистичным.",
+    ],
+  },
+  {
+    title: "Recsys: два этажа",
+    kicker: "candidates → rerank",
+    diagram: "recsys",
+    body:
+      "В recommender systems первый этаж обязан быстро найти много хороших кандидатов, а второй этаж сортирует их богатыми признаками. Не путай метрики: recall кандидатов и качество reranker — разные вещи.",
+    bullets: [
+      "Candidate generator оптимизирует Recall@K и скорость.",
+      "Reranker получает user-item rows и group/query id.",
+      "OOF-признаки и time split спасают от leakage.",
+    ],
+  },
+  {
+    title: "Diffusion: шум как задача",
+    kicker: "x0 → xt → eps",
+    diagram: "diffusion",
+    body:
+      "В базовой diffusion-модели мы портим картинку шумом на случайном timestep и учим сеть предсказывать добавленный noise. На inference идём назад: из шума постепенно восстанавливаем изображение.",
+    bullets: [
+      "`t` влияет на уровень шума, поэтому timestep embedding подаётся в модель.",
+      "Частый target — noise `eps`, не сама чистая картинка.",
+      "Для маленьких задач важнее понять shapes и scheduler, чем гнаться за большой архитектурой.",
+    ],
+  },
+];
+
 const lessonLabels = {
   order: "Собери код",
   fill: "Впиши код",
@@ -3391,7 +3467,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadLessonPacks().then(() => {
     ensureValidTopicSelection();
     renderAll();
-    bootstrapAccount().finally(enforceAuthGate);
+    bootstrapAccount().finally(() => {
+      enforceAuthGate();
+      maybeOpenGuide();
+    });
   });
   registerServiceWorker();
 });
@@ -3428,6 +3507,7 @@ function cacheElements() {
     "dailyQuests",
     "weakList",
     "referenceList",
+    "theoryGrid",
     "libraryGrid",
     "profileXp",
     "profileStreak",
@@ -3471,6 +3551,12 @@ function cacheElements() {
     "checkUpdatesButton",
     "releaseLink",
     "updateStatus",
+    "guideButton",
+    "guideModal",
+    "guideCloseButton",
+    "guideStartButton",
+    "guideLessonButton",
+    "guideLaterButton",
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -3501,6 +3587,20 @@ function bindEvents() {
   });
   els.queueList?.addEventListener("click", handleQueueClick);
   els.accountButton?.addEventListener("click", openAuthModal);
+  els.guideButton?.addEventListener("click", () => openGuideModal({ manual: true }));
+  els.guideCloseButton?.addEventListener("click", () => closeGuideModal({ remember: true }));
+  els.guideModal?.addEventListener("click", (event) => {
+    if (event.target === els.guideModal) closeGuideModal({ remember: true });
+  });
+  els.guideStartButton?.addEventListener("click", () => {
+    closeGuideModal({ remember: true });
+    setScreen("roadmap");
+  });
+  els.guideLessonButton?.addEventListener("click", () => {
+    closeGuideModal({ remember: true });
+    setScreen("lesson");
+  });
+  els.guideLaterButton?.addEventListener("click", () => closeGuideModal({ remember: false }));
   els.authCloseButton?.addEventListener("click", closeAuthModal);
   els.authModal?.addEventListener("click", (event) => {
     if (event.target === els.authModal) closeAuthModal();
@@ -4322,14 +4422,86 @@ function renderPracticeSets() {
 }
 
 function renderLibrary() {
-  els.libraryGrid.innerHTML = libraryCards
-    .map((card) => `<div class="library-card"><strong>${card.title}</strong><p>${card.text}</p></div>`)
-    .join("");
+  if (els.theoryGrid) {
+    els.theoryGrid.innerHTML = theoryCards.map(renderTheoryCard).join("");
+  }
+  if (els.libraryGrid) {
+    els.libraryGrid.innerHTML = libraryCards
+      .map((card) => `<div class="library-card"><strong>${card.title}</strong><p>${card.text}</p></div>`)
+      .join("");
+  }
   if (els.packSourceInput) {
     els.packSourceInput.value = localStorage.getItem(PACK_SOURCE_STORAGE_KEY) || DEFAULT_PACK_INDEX_URL;
   }
   if (els.appVersionBadge) els.appVersionBadge.textContent = `v${APP_VERSION}`;
   renderGithubIntegration();
+}
+
+function renderTheoryCard(card) {
+  return `
+    <article class="theory-card">
+      ${renderTheoryDiagram(card.diagram)}
+      <div class="theory-copy">
+        <span class="eyebrow">${escapeHtml(card.kicker)}</span>
+        <h3>${escapeHtml(card.title)}</h3>
+        <p>${escapeHtml(card.body)}</p>
+        <ul>
+          ${card.bullets.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </div>
+    </article>
+  `;
+}
+
+function renderTheoryDiagram(kind) {
+  const diagrams = {
+    detection: `
+      <div class="theory-diagram diagram-detection" aria-hidden="true">
+        <div class="diagram-image"><span class="bbox subject">person</span><span class="bbox object">bike</span></div>
+        <div class="diagram-row"><span>xyxy</span><i></i><span>xywh</span><i></i><span>target</span></div>
+      </div>
+    `,
+    detr: `
+      <div class="theory-diagram diagram-detr" aria-hidden="true">
+        <div class="query-stack"><span>q1</span><span>q2</span><span>q3</span><span>no</span></div>
+        <div class="match-lines"><i></i><i></i><i></i></div>
+        <div class="target-stack"><span>box A</span><span>box B</span><span>empty</span></div>
+      </div>
+    `,
+    segmentation: `
+      <div class="theory-diagram diagram-segmentation" aria-hidden="true">
+        <div class="mask-panel logits">logits</div>
+        <i></i>
+        <div class="mask-panel prob">sigmoid</div>
+        <i></i>
+        <div class="mask-panel mask">mask</div>
+      </div>
+    `,
+    relation: `
+      <div class="theory-diagram diagram-relation" aria-hidden="true">
+        <div class="pair-box"><span>subject</span><strong>→</strong><span>object</span></div>
+        <div class="feature-pills"><span>IoU</span><span>dx</span><span>labels</span></div>
+        <div class="predicate-pill">predicate</div>
+      </div>
+    `,
+    recsys: `
+      <div class="theory-diagram diagram-recsys" aria-hidden="true">
+        <div class="candidate-cloud"><span></span><span></span><span></span><span></span><span></span></div>
+        <i></i>
+        <div class="ranked-list"><span>1</span><span>2</span><span>3</span></div>
+      </div>
+    `,
+    diffusion: `
+      <div class="theory-diagram diagram-diffusion" aria-hidden="true">
+        <div class="noise-frame clean"></div>
+        <i></i>
+        <div class="noise-frame noisy"></div>
+        <i></i>
+        <div class="noise-frame pure"></div>
+      </div>
+    `,
+  };
+  return diagrams[kind] || "";
 }
 
 function renderStats() {
@@ -4405,6 +4577,25 @@ function showFeedback(label, text, good) {
   els.feedbackBox.hidden = false;
   els.feedbackBox.className = `feedback ${good ? "is-good" : "is-bad"}`;
   els.feedbackBox.innerHTML = `<strong>${escapeHtml(label)}.</strong>${formatFeedbackText(text)}`;
+}
+
+function maybeOpenGuide() {
+  if (isAuthLocked()) return;
+  if (localStorage.getItem(GUIDE_SEEN_KEY)) return;
+  window.setTimeout(() => openGuideModal(), 450);
+}
+
+function openGuideModal({ manual = false } = {}) {
+  if (!els.guideModal) return;
+  if (manual) localStorage.setItem(GUIDE_SEEN_KEY, "1");
+  els.guideModal.hidden = false;
+  els.guideStartButton?.focus();
+}
+
+function closeGuideModal({ remember = true } = {}) {
+  if (!els.guideModal) return;
+  if (remember) localStorage.setItem(GUIDE_SEEN_KEY, "1");
+  els.guideModal.hidden = true;
 }
 
 function isAuthLocked() {

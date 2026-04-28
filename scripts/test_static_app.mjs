@@ -44,6 +44,11 @@ assert.ok(html.includes('id="githubIntegrationPanel"'), "index.html should inclu
 assert.ok(html.includes('id="githubRepoEnableButton"'), "index.html should include GitHub repo mode button");
 assert.ok(html.includes('id="githubTokenInput"'), "index.html should include serverless GitHub token input");
 assert.ok(html.includes('id="checkUpdatesButton"'), "index.html should include update checker button");
+assert.ok(html.includes('id="guideModal"'), "index.html should include welcome guide modal");
+assert.ok(html.includes('id="guideButton"'), "index.html should include guide reopen button");
+assert.ok(html.includes('id="theoryGrid"'), "index.html should include theory reading grid");
+assert.ok(html.includes('class="settings-panel"'), "index.html should include profile settings panel");
+assert.ok(html.indexOf('class="settings-panel"') < html.indexOf('id="guideButton"'), "guide reopen button should live in settings/profile, not topbar");
 assert.ok(html.includes("./assets/brand/mlingo-cat-logo-512.png"), "index.html should use the MLingo cat logo in the app shell");
 assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-readme-card.png")), "README card image should exist");
 assert.ok(fs.existsSync(path.join(root, "assets/brand/mlingo-cat-logo-512.png")), "app logo image should exist");
@@ -86,6 +91,9 @@ assert.ok(app.includes("async function syncSolutionIfEnabled"), "app should sync
 assert.ok(app.includes("async function pushProgressToGithubDirect"), "app should push progress to GitHub without backend");
 assert.ok(app.includes("async function checkForUpdates"), "app should check GitHub Releases for updates");
 assert.ok(app.includes("function renderGithubIntegration"), "app should render GitHub integration status");
+assert.ok(app.includes("const GUIDE_SEEN_KEY"), "app should remember whether welcome guide was seen");
+assert.ok(app.includes("function maybeOpenGuide"), "app should open the welcome guide on first run");
+assert.ok(app.includes("const theoryCards"), "app should include a built-in theory section");
 assert.ok(app.includes("async function bootstrapCookieAccount"), "app should restore cookie-backed sessions");
 assert.ok(app.includes("function renderIdea"), "app should include idea lesson renderer");
 assert.ok(!app.includes("async function submitLocalAuth"), "app should not include local auth fallback");
