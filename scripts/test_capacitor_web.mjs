@@ -12,7 +12,7 @@ function read(filePath) {
 
 assert.ok(fs.existsSync(webDir), "web directory should exist after npm run cap:prepare");
 
-for (const file of ["index.html", "app.js", "styles.css", "service-worker.js", "manifest.webmanifest", "icon.svg"]) {
+for (const file of ["index.html", "app.js", "styles.css", "service-worker.js", "manifest.webmanifest", "icon.svg", "python-runner-worker.js"]) {
   const source = path.join(root, file);
   const built = path.join(webDir, file);
   assert.ok(fs.existsSync(built), `web/${file} should exist`);

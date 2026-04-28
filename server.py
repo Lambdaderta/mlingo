@@ -146,11 +146,23 @@ def init_db():
             )
             """
         )
+        db.execute(
+            """
+            create table if not exists solution_comments (
+              id bigserial primary key,
+              solution_id bigint not null references solutions(id) on delete cascade,
+              user_id bigint not null references users(id) on delete cascade,
+              body text not null,
+              created_at bigint not null
+            )
+            """
+        )
         db.execute("create index if not exists sessions_user_id_idx on sessions(user_id)")
         db.execute("create index if not exists sessions_expires_at_idx on sessions(expires_at)")
         db.execute("create index if not exists events_user_created_idx on events(user_id, created_at desc)")
         db.execute("create index if not exists solutions_created_idx on solutions(created_at desc)")
         db.execute("create index if not exists solutions_lesson_idx on solutions(lesson_id, created_at desc)")
+        db.execute("create index if not exists solution_comments_solution_created_idx on solution_comments(solution_id, created_at asc)")
         db.execute("create index if not exists progress_leaderboard_idx on progress(xp desc, streak desc, completed_count desc, updated_at asc)")
         db.execute("create unique index if not exists users_email_lower_unique_idx on users (lower(email)) where email is not null")
         db.execute("create unique index if not exists users_github_id_unique_idx on users (github_id) where github_id is not null")
@@ -329,6 +341,34 @@ def leaderboard(db, limit=20):
         }
         for index, row in enumerate(rows)
     ]
+
+
+def public_solution(row, include_answer=False):
+    item = {
+        "id": row["id"],
+        "lessonId": row["lesson_id"],
+        "lessonTitle": row["lesson_title"],
+        "topicTitle": row.get("topic_title"),
+        "kind": row["kind"],
+        "githubUrl": row.get("github_html_url"),
+        "status": row["status"],
+        "createdAt": row["created_at"],
+        "author": row.get("github_login") or row.get("username"),
+        "commentCount": int(row.get("comment_count") or 0),
+    }
+    if include_answer:
+        item["answer"] = row.get("answer_text") or ""
+    return item
+
+
+def public_comment(row):
+    return {
+        "id": row["id"],
+        "solutionId": row["solution_id"],
+        "body": row["body"],
+        "createdAt": row["created_at"],
+        "author": row.get("github_login") or row.get("username"),
+    }
 
 
 def cleanup_sessions(db):
@@ -963,9 +1003,12 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                     rows = db.execute(
                         """
                         select s.id, s.lesson_id, s.lesson_title, s.topic_title, s.kind, s.github_html_url,
-                               s.status, s.created_at, u.username, u.github_login
+                               s.status, s.created_at, u.username, u.github_login,
+                               count(c.id)::int as comment_count
                         from solutions s
                         join users u on u.id = s.user_id
+                        left join solution_comments c on c.solution_id = s.id
+                        group by s.id, u.username, u.github_login
                         order by s.created_at desc
                         limit 50
                         """
@@ -974,22 +1017,83 @@ class MLingoHandler(SimpleHTTPRequestHandler):
                         HTTPStatus.OK,
                         {
                             "ok": True,
-                            "solutions": [
-                                {
-                                    "id": row["id"],
-                                    "lessonId": row["lesson_id"],
-                                    "lessonTitle": row["lesson_title"],
-                                    "topicTitle": row["topic_title"],
-                                    "kind": row["kind"],
-                                    "githubUrl": row["github_html_url"],
-                                    "status": row["status"],
-                                    "createdAt": row["created_at"],
-                                    "author": row["github_login"] or row["username"],
-                                }
-                                for row in rows
-                            ],
+                            "solutions": [public_solution(row) for row in rows],
                         },
                     )
+                    return
+
+                detail_match = re.fullmatch(r"/api/review/solutions/(\d+)", path)
+                if detail_match and method == "GET":
+                    solution_id = int(detail_match.group(1))
+                    row = db.execute(
+                        """
+                        select s.id, s.lesson_id, s.lesson_title, s.topic_title, s.kind, s.answer_text,
+                               s.github_html_url, s.status, s.created_at, u.username, u.github_login,
+                               count(c.id)::int as comment_count
+                        from solutions s
+                        join users u on u.id = s.user_id
+                        left join solution_comments c on c.solution_id = s.id
+                        where s.id = %s
+                        group by s.id, u.username, u.github_login
+                        """,
+                        (solution_id,),
+                    ).fetchone()
+                    if not row:
+                        self.send_error_json(HTTPStatus.NOT_FOUND, "Решение не найдено")
+                        return
+                    comments = db.execute(
+                        """
+                        select c.id, c.solution_id, c.body, c.created_at, u.username, u.github_login
+                        from solution_comments c
+                        join users u on u.id = c.user_id
+                        where c.solution_id = %s
+                        order by c.created_at asc
+                        """,
+                        (solution_id,),
+                    ).fetchall()
+                    self.send_json(
+                        HTTPStatus.OK,
+                        {
+                            "ok": True,
+                            "solution": public_solution(row, include_answer=True),
+                            "comments": [public_comment(comment) for comment in comments],
+                        },
+                    )
+                    return
+
+                comment_match = re.fullmatch(r"/api/review/solutions/(\d+)/comments", path)
+                if comment_match and method == "POST":
+                    user = self.require_user(db)
+                    if not user:
+                        return
+                    solution_id = int(comment_match.group(1))
+                    exists = db.execute("select id from solutions where id = %s", (solution_id,)).fetchone()
+                    if not exists:
+                        self.send_error_json(HTTPStatus.NOT_FOUND, "Решение не найдено")
+                        return
+                    payload = read_json(self)
+                    body = str(payload.get("body") or "").strip()
+                    if len(body) < 8:
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Комментарий слишком короткий")
+                        return
+                    if len(body) > 4000:
+                        self.send_error_json(HTTPStatus.BAD_REQUEST, "Комментарий длиннее 4000 символов")
+                        return
+                    row = db.execute(
+                        """
+                        insert into solution_comments (solution_id, user_id, body, created_at)
+                        values (%s, %s, %s, %s)
+                        returning id, solution_id, body, created_at
+                        """,
+                        (solution_id, user["id"], body, now_ts()),
+                    ).fetchone()
+                    row = {
+                        **row,
+                        "username": user["username"],
+                        "github_login": user.get("github_login"),
+                    }
+                    db.execute("update solutions set status = 'in_discussion' where id = %s and status = 'queued_for_review'", (solution_id,))
+                    self.send_json(HTTPStatus.OK, {"ok": True, "comment": public_comment(row)})
                     return
 
             self.send_error_json(HTTPStatus.NOT_FOUND, "API endpoint не найден")

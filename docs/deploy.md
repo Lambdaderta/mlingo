@@ -33,6 +33,100 @@ Browser / PWA
 - Railway domains: https://docs.railway.com/cli/domain
 - Fly.io custom domains: https://fly.io/docs/networking/custom-domain/
 
+## Ветки и релизный поток
+
+Рекомендуемый режим перед первым публичным запуском:
+
+- `dev` — все текущие правки, тестовые деплои и проверка задач;
+- `main` — только то, что уже прошло локальные проверки и готово ехать на публичный домен.
+
+Перед merge в `main`:
+
+```bash
+npm test
+npm run check
+```
+
+Если деплой идет на VPS вручную, сначала обновляй `dev`-сервер или локальную копию, проверяй `/api/health`, 2-3 урока, GitHub login и PWA install, и только потом вливай в `main`.
+
+## VPS Docker: Timeweb / Ubuntu
+
+Для VPS production используется отдельный файл [docker-compose.prod.yml](../docker-compose.prod.yml). Он поднимает:
+
+- `app` — Python backend и static frontend;
+- `db` — PostgreSQL;
+- `caddy` — reverse proxy, HTTPS через Let's Encrypt и redirect `www -> apex`.
+
+Минимальная подготовка сервера:
+
+```bash
+apt-get update
+apt-get install -y ca-certificates curl gnupg git ufw fail2ban
+```
+
+Поставь Docker по официальной инструкции Docker для Ubuntu, затем проверь:
+
+```bash
+docker --version
+docker compose version
+```
+
+Если Docker Hub отвечает `You have reached your unauthenticated pull rate limit`, сделай на сервере:
+
+```bash
+docker login
+```
+
+Или переопредели образы в `.env`, если используешь доверенный registry mirror.
+
+Деплой проекта:
+
+```bash
+cd /opt
+git clone https://github.com/Lambdaderta/mlingo.git
+cd mlingo
+cp .env.production.example .env
+```
+
+В `.env` обязательно поменяй:
+
+```text
+SITE_DOMAIN=mlingo.online
+POSTGRES_PASSWORD=длинный-случайный-пароль
+MLINGO_ALLOWED_ORIGIN=https://mlingo.online
+GITHUB_OAUTH_REDIRECT_URI=https://mlingo.online/api/auth/github/callback
+```
+
+Перед первым запуском DNS должен смотреть на сервер:
+
+```text
+A     @      SERVER_IPV4
+A     www    SERVER_IPV4
+```
+
+Запуск:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f app caddy
+```
+
+Проверки:
+
+```bash
+curl -fsS http://127.0.0.1:4180/api/health
+curl -fsS https://mlingo.online/api/health
+```
+
+Обновление после merge в `main`:
+
+```bash
+cd /opt/mlingo
+git pull --ff-only origin main
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
 ## Быстрый путь через Render
 
 1. Зайди на Render и подключи GitHub repo `Lambdaderta/mlingo`.

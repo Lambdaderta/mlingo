@@ -111,6 +111,31 @@ idea    написать план решения; локальная прове�
 - Для `order` можно добавить поле `answers`, если несколько порядков строк фактически эквивалентны.
 - Для `write` и `fix` желательно добавлять `testsText`, чтобы ученик понимал, какой контракт проверяется.
 
+## Локальный Python runner
+
+Для `write` и `fix`-уроков можно добавить поле `pyTests`. Тогда MLingo попробует запустить код ученика в браузере через Pyodide и проверить поведение assert-тестами:
+
+```json
+{
+  "kind": "write",
+  "starter": "def mask_to_bbox(mask):",
+  "answer": "def mask_to_bbox(mask):\n    ...",
+  "testsText": "Проверяется пустая маска и прямоугольник.",
+  "pyTests": {
+    "packages": ["numpy"],
+    "setup": "import numpy as np",
+    "code": "mask = np.zeros((3, 4), dtype=np.uint8)\nassert mask_to_bbox(mask) is None",
+    "timeoutMs": 8000
+  }
+}
+```
+
+Если Pyodide недоступен, приложение не блокирует урок и использует старую сверку с эталонным кодом. Для настоящей offline-проверки положите Pyodide full distribution в `vendor/pyodide/` так, чтобы существовал файл `vendor/pyodide/pyodide.js` и рядом лежали нужные `.wasm`/package-файлы. Без локального Pyodide web-версия может попробовать CDN, но это уже не offline-режим.
+
+Runner-код запускается только для встроенных уроков и bundled packs из репозитория. Уроки, импортированные пользователем через UI или сохраненные в `localStorage`, загружаются без `pyTests`, чтобы случайный внешний JSON не мог выполнить произвольный Python-код в браузере.
+
+`pyTests.setup` выполняется перед кодом ученика, `pyTests.code` — после него в том же namespace. Пишите тесты как обычный Python с `assert`; проверка должна быть быстрой, детерминированной и не требовать интернета, файловой системы или pretrained weights.
+
 ## Проверка packs
 
 ```bash

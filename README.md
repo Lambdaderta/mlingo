@@ -13,54 +13,67 @@ MLingo — тренажер для практики ML-кода руками. П
 - Offline-first режим: приложение продолжает работать с уже загруженными заданиями.
 - JSON-паки заданий: банк задач можно расширять без пересборки приложения.
 - Импорт и синхронизация паков из GitHub raw URL.
-- Опциональная интеграция с GitHub для сохранения прогресса и решений в отдельный репозиторий.
-- Опциональный backend на Python + PostgreSQL для аккаунтов, синхронизации, leaderboard и будущих review-механик.
+- GitHub-вход: аккаунт MLingo создается автоматически после OAuth.
+- GitHub sync: прогресс и решения можно сохранять в отдельный репозиторий.
+- Разборы решений: публичная лента решений участников, комментарии и ссылки на GitHub.
+- Кнопка “Нашли ошибку?” открывает prefilled GitHub Issue по конкретному уроку.
 - PWA, Android shell через Capacitor и macOS shell на WKWebView.
 
-## Быстрый запуск
+## Сайт
 
-Статический запуск без backend:
-
-```bash
-python3 -m http.server 4173
-```
-
-После запуска откройте:
+Публичная версия:
 
 ```text
-http://127.0.0.1:4173/
+https://mlingo.online
 ```
 
-Запуск с backend и PostgreSQL:
+Уроки доступны без входа. GitHub нужен для облачной синхронизации, leaderboard и разборов решений.
 
-```bash
-docker compose up --build
-```
+## Скачать Приложения
 
-Приложение будет доступно на:
+Все сборки публикуются в GitHub Releases:
 
 ```text
-http://localhost:4180/
+https://github.com/Lambdaderta/mlingo/releases/latest
 ```
 
-## Запуск Backend Без Docker
+Скачать macOS DMG через терминал:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python3 server.py --port 4180
+python3 - <<'PY'
+import json, urllib.request
+release = json.load(urllib.request.urlopen("https://api.github.com/repos/Lambdaderta/mlingo/releases/latest"))
+asset = next(a for a in release["assets"] if a["name"].endswith("-macOS.dmg") or a["name"].endswith("-macOS.zip"))
+urllib.request.urlretrieve(asset["browser_download_url"], asset["name"])
+print(asset["name"])
+PY
+open MLingo-*-macOS.*
 ```
 
-Основные переменные окружения:
+Если macOS ругается на quarantine после установки:
 
-- `DATABASE_URL` — строка подключения к PostgreSQL.
-- `MLINGO_ALLOWED_ORIGIN` — origin frontend-приложения.
-- `PORT` — порт backend, по умолчанию `4180`.
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — GitHub OAuth App.
-- `GITHUB_OAUTH_REDIRECT_URI` — callback URL GitHub OAuth.
-- `GITHUB_SOLUTIONS_REPO_NAME` — репозиторий для сохранения решений, по умолчанию `mlingo-solutions`.
+```bash
+xattr -dr com.apple.quarantine /Applications/MLingo.app
+open /Applications/MLingo.app
+```
+
+Скачать Android APK через терминал:
+
+```bash
+python3 - <<'PY'
+import json, urllib.request
+release = json.load(urllib.request.urlopen("https://api.github.com/repos/Lambdaderta/mlingo/releases/latest"))
+asset = next(a for a in release["assets"] if a["name"].endswith(".apk"))
+urllib.request.urlretrieve(asset["browser_download_url"], "MLingo.apk")
+print("MLingo.apk")
+PY
+```
+
+Установить APK на подключенный Android-телефон:
+
+```bash
+adb install -r MLingo.apk
+```
 
 ## Пакеты Заданий
 
@@ -84,7 +97,7 @@ MLingo умеет сохранять прогресс и решения в GitHu
 
 Подробнее: [docs/github-sync.md](docs/github-sync.md).
 
-## Сборка Приложений
+## Локальная Сборка
 
 Android debug APK:
 

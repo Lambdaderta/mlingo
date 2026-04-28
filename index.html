@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=clean22" />
-    <script defer src="./app.js?v=clean22"></script>
+    <link rel="stylesheet" href="./styles.css?v=clean25" />
+    <script defer src="./app.js?v=clean25"></script>
   </head>
   <body>
     <div class="app-shell" id="top">
@@ -44,6 +44,7 @@
           <nav class="side-nav" aria-label="Разделы">
             <button class="nav-button is-active" data-screen="roadmap" type="button">Карта</button>
             <button class="nav-button" data-screen="lesson" type="button">Урок</button>
+            <button class="nav-button" data-screen="review" type="button">Разборы</button>
             <button class="nav-button" data-screen="profile" type="button">Профиль</button>
             <button class="nav-button" data-screen="library" type="button">Теория</button>
           </nav>
@@ -123,12 +124,33 @@
 
               <div class="lesson-controls">
                 <button class="ghost-button" id="hintButton" type="button">Подсказка</button>
+                <button class="ghost-button" id="reportLessonButton" type="button">Нашли ошибку?</button>
                 <button class="ghost-button" id="resetButton" type="button">Сброс</button>
                 <button class="ghost-button" id="prevButton" type="button">Назад</button>
                 <button class="primary-button" id="checkButton" type="button">Проверить</button>
                 <button class="primary-button next-button" id="nextButton" type="button">Дальше</button>
               </div>
               <div class="feedback" id="feedbackBox" hidden></div>
+            </article>
+          </section>
+
+          <section class="app-screen" id="screen-review">
+            <article class="lesson-card review-screen">
+              <div class="lesson-meta">
+                <div>
+                  <span class="eyebrow">Разборы</span>
+                  <h2>Решения участников</h2>
+                </div>
+                <button class="ghost-button" id="reviewRefreshButton" type="button">Обновить</button>
+              </div>
+              <p class="prompt">Публичные решения из GitHub sync. Можно открыть код, сравнить подход и оставить короткий разбор.</p>
+              <div class="review-layout">
+                <div class="review-list" id="reviewSolutionList"></div>
+                <div class="review-detail" id="reviewDetail">
+                  <div class="empty-state">Пока выбери решение слева.</div>
+                </div>
+              </div>
+              <div class="feedback pack-status" id="reviewStatus" hidden></div>
             </article>
           </section>
 
@@ -156,6 +178,7 @@
                 </div>
                 <div class="pack-actions">
                   <button class="primary-button" id="packSyncShortcutButton" type="button">Обновить задания</button>
+                  <button class="ghost-button" id="reportAppButton" type="button">Нашли ошибку?</button>
                   <button class="ghost-button" id="guideButton" type="button">Открыть гайд</button>
                 </div>
               </section>
@@ -204,7 +227,7 @@
                     <li id="githubRepoLine">Используется <code>mlingo-solutions</code>.</li>
                     <li>Прогресс сохраняется в <code>progress/mlingo-progress.json</code>.</li>
                     <li>После write/fix/idea задач решение пушится markdown-файлом в <code>solutions/</code>.</li>
-                    <li>Разборы решений будут отдельным серверным модулем.</li>
+                    <li>Решения попадают в раздел <code>Разборы</code>, где участники могут обсуждать подход.</li>
                   </ul>
                 </div>
                 <div class="auth-hint" id="githubIntegrationMessage"></div>
@@ -304,6 +327,7 @@
       <nav class="mobile-tabs" aria-label="Мобильная навигация">
         <button class="mobile-tab is-active" data-screen="roadmap" type="button">Карта</button>
         <button class="mobile-tab" data-screen="lesson" type="button">Урок</button>
+        <button class="mobile-tab" data-screen="review" type="button">Разборы</button>
         <button class="mobile-tab" data-screen="profile" type="button">Профиль</button>
         <button class="mobile-tab" data-screen="library" type="button">Теория</button>
       </nav>

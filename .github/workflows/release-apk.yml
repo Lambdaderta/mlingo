@@ -85,7 +85,12 @@ jobs:
           mkdir -p dist
           VERSION="$(node -p "require('./package.json').version")"
           SOURCE="dist/MLingo-v${VERSION}-macOS.dmg"
-          TARGET="dist/MLingo-${RELEASE_TAG}-macOS.dmg"
+          EXT="dmg"
+          if [ ! -f "$SOURCE" ]; then
+            SOURCE="dist/MLingo-v${VERSION}-macOS.zip"
+            EXT="zip"
+          fi
+          TARGET="dist/MLingo-${RELEASE_TAG}-macOS.${EXT}"
           if [ "$SOURCE" != "$TARGET" ]; then
             cp "$SOURCE" "$TARGET"
           fi

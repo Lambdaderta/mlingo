@@ -5,8 +5,12 @@ const PACK_SOURCE_STORAGE_KEY = "mlingo.lesson.pack_source.v1";
 const GITHUB_DIRECT_CONFIG_KEY = "mlingo.github.direct.config.v1";
 const GITHUB_DIRECT_TOKEN_KEY = "mlingo.github.direct.token.v1";
 const GUIDE_SEEN_KEY = "mlingo.guide.seen.v1";
-const APP_VERSION = "0.1.12";
+const APP_VERSION = "2.0.0";
 const RELEASES_API_URL = "https://api.github.com/repos/Lambdaderta/mlingo/releases/latest";
+const PROJECT_ISSUES_URL = "https://github.com/Lambdaderta/mlingo/issues/new";
+const PYODIDE_LOCAL_SCRIPT = "./vendor/pyodide/pyodide.js";
+const PYODIDE_CDN_SCRIPT = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
+const PYTHON_RUNNER_TIMEOUT_MS = 8000;
 const DEFAULT_PACK_URLS = [
   "./lesson-packs/cv-offline-pack.json",
   "./lesson-packs/cv-fundamentals-pack.json",
@@ -151,6 +155,12 @@ const topics = [
         answer:
           "def mask_to_bbox(mask):\n    ys, xs = np.where(mask > 0)\n    if len(xs) == 0:\n        return None\n    return [xs.min(), ys.min(), xs.max(), ys.max()]",
         testsText: "Проверка: пустая маска -> None; прямоугольник -> min/max координаты.",
+        pyTests: {
+          packages: ["numpy"],
+          setup: "import numpy as np",
+          code:
+            "empty = np.zeros((3, 4), dtype=np.uint8)\nassert mask_to_bbox(empty) is None\nmask = np.zeros((5, 6), dtype=np.uint8)\nmask[1:4, 2:5] = 1\nassert mask_to_bbox(mask) == [2, 1, 4, 3]\nmask = np.zeros((4, 4), dtype=bool)\nmask[3, 0] = True\nassert mask_to_bbox(mask) == [0, 3, 0, 3]",
+        },
         hint: "`np.where` для 2D маски возвращает сначала y, потом x.",
         explain: "Это ручной код для postprocess, crop и проверки разметки.",
       },
@@ -1502,6 +1512,12 @@ const extraLessonPacks = {
       answer:
         "def rle_encode(mask):\n    pixels = mask.T.flatten().astype(np.uint8)\n    pixels = np.concatenate([[0], pixels, [0]])\n    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1\n    runs[1::2] -= runs[::2]\n    return ' '.join(map(str, runs))",
       testsText: "Проверяется пустая маска, один объект и порядок Fortran/Kaggle.",
+      pyTests: {
+        packages: ["numpy"],
+        setup: "import numpy as np",
+        code:
+          "assert rle_encode(np.zeros((2, 3), dtype=np.uint8)) == ''\nmask = np.zeros((3, 4), dtype=np.uint8)\nmask[0, 0] = 1\nmask[2, 1] = 1\nassert rle_encode(mask) == '1 1 6 1'\nblock = np.zeros((3, 3), dtype=np.uint8)\nblock[1:, 1:] = 1\nassert rle_encode(block) == '5 2 8 2'",
+      },
       hint: "Kaggle segmentation часто ожидает flatten по колонкам, поэтому нужен `mask.T.flatten()`.",
       explain: "RLE хранит старт и длину подряд идущих foreground-пикселей. Ошибка в порядке flatten полностью ломает submission.",
       difficulty: 4,
@@ -1515,6 +1531,12 @@ const extraLessonPacks = {
       answer:
         "def rle_decode(rle, shape):\n    mask = np.zeros(shape[0] * shape[1], dtype=np.uint8)\n    if not rle:\n        return mask.reshape((shape[1], shape[0])).T\n    values = list(map(int, rle.split()))\n    starts = np.array(values[0::2]) - 1\n    lengths = np.array(values[1::2])\n    for start, length in zip(starts, lengths):\n        mask[start:start + length] = 1\n    return mask.reshape((shape[1], shape[0])).T",
       testsText: "Проверяется round-trip encode/decode и пустая строка.",
+      pyTests: {
+        packages: ["numpy"],
+        setup: "import numpy as np",
+        code:
+          "assert np.array_equal(rle_decode('', (2, 3)), np.zeros((2, 3), dtype=np.uint8))\nexpected = np.zeros((3, 4), dtype=np.uint8)\nexpected[0, 0] = 1\nexpected[2, 1] = 1\nassert np.array_equal(rle_decode('1 1 6 1', (3, 4)), expected)\nblock = np.zeros((3, 3), dtype=np.uint8)\nblock[1:, 1:] = 1\nassert np.array_equal(rle_decode('5 2 8 2', (3, 3)), block)",
+      },
       hint: "Если encode делал `mask.T.flatten()`, decode должен вернуть обратный reshape.",
       explain: "RLE decode нужен для локальной валидации, визуализации и ансамблей по submission-файлам.",
       difficulty: 5,
@@ -1528,6 +1550,12 @@ const extraLessonPacks = {
       answer:
         "def pad_to_square(img, fill=0):\n    h, w = img.shape[:2]\n    size = max(h, w)\n    out = np.full((size, size, *img.shape[2:]), fill, dtype=img.dtype)\n    out[:h, :w] = img\n    return out",
       testsText: "Проверяется H>W, W>H, grayscale/RGB и сохранение dtype.",
+      pyTests: {
+        packages: ["numpy"],
+        setup: "import numpy as np",
+        code:
+          "rgb = np.arange(2 * 3 * 2, dtype=np.uint8).reshape(2, 3, 2)\nout = pad_to_square(rgb, fill=9)\nassert out.shape == (3, 3, 2)\nassert out.dtype == rgb.dtype\nassert np.array_equal(out[:2, :3], rgb)\ngray = np.arange(4, dtype=np.int16).reshape(4, 1)\nout = pad_to_square(gray, fill=-1)\nassert out.shape == (4, 4)\nassert out.dtype == gray.dtype\nassert np.array_equal(out[:, :1], gray)\nassert np.all(out[:, 1:] == -1)",
+      },
       hint: "Создай новый квадрат и скопируй оригинал в левый верхний угол.",
       explain: "Padding до квадрата часто проще, чем искажать aspect ratio при resize.",
       difficulty: 3,
@@ -2604,6 +2632,12 @@ const curatedContestLessonPack = {
       answer:
         "def mask_to_bbox_exclusive(mask):\n    ys, xs = np.where(mask > 0)\n    if len(xs) == 0:\n        return None\n    return [xs.min(), ys.min(), xs.max() + 1, ys.max() + 1]",
       testsText: "Проверяется пустая маска и что правый/нижний край exclusive.",
+      pyTests: {
+        packages: ["numpy"],
+        setup: "import numpy as np",
+        code:
+          "assert mask_to_bbox_exclusive(np.zeros((2, 2), dtype=np.uint8)) is None\nmask = np.zeros((5, 6), dtype=np.uint8)\nmask[1:4, 2:5] = 1\nassert mask_to_bbox_exclusive(mask) == [2, 1, 5, 4]\nmask = np.zeros((3, 3), dtype=bool)\nmask[0, 2] = True\nassert mask_to_bbox_exclusive(mask) == [2, 0, 3, 1]",
+      },
       hint: "В numpy slice правый край не включается.",
       explain: "Это не повтор inclusive bbox: формат удобен для `img[y1:y2, x1:x2]` без `+1` в месте crop.",
       difficulty: 3,
@@ -2617,6 +2651,11 @@ const curatedContestLessonPack = {
       answer:
         "def box_iou(a, b, eps=1e-7):\n    x1 = max(a[0], b[0])\n    y1 = max(a[1], b[1])\n    x2 = min(a[2], b[2])\n    y2 = min(a[3], b[3])\n    inter = max(0, x2 - x1) * max(0, y2 - y1)\n    area_a = max(0, a[2] - a[0]) * max(0, a[3] - a[1])\n    area_b = max(0, b[2] - b[0]) * max(0, b[3] - b[1])\n    return inter / (area_a + area_b - inter + eps)",
       testsText: "Проверяется нет пересечения, полное совпадение и частичное пересечение.",
+      pyTests: {
+        setup: "import math",
+        code:
+          "assert abs(box_iou([0, 0, 2, 2], [3, 3, 4, 4])) < 1e-8\nassert abs(box_iou([0, 0, 2, 2], [0, 0, 2, 2], eps=0) - 1.0) < 1e-8\nexpected = 1 / 7\nassert abs(box_iou([0, 0, 2, 2], [1, 1, 3, 3], eps=0) - expected) < 1e-8\nassert abs(box_iou([0, 0, 0, 2], [0, 0, 2, 2])) < 1e-8",
+      },
       hint: "Union = area_a + area_b - inter.",
       explain: "Это IoU для bbox, а не для mask, поэтому отдельно закрепляет формат координат.",
       difficulty: 4,
@@ -3538,18 +3577,24 @@ let currentScreen = state.currentScreen || "roadmap";
 let currentTheoryId = state.currentTheoryId || theoryChapters[0].id;
 let currentTheoryArticleIndex = state.currentTheoryArticleIndex || 0;
 const requestedScreen = new URLSearchParams(window.location.search).get("screen");
-if (["roadmap", "lesson", "profile", "library"].includes(requestedScreen)) currentScreen = requestedScreen;
+if (["roadmap", "lesson", "review", "profile", "library"].includes(requestedScreen)) currentScreen = requestedScreen;
 let selectedBlocks = [];
 let selectedOption = null;
 let selectedBugLine = null;
 let activeBlockOrder = [];
 let typedCode = "";
 let lastIdeaEvaluation = null;
+let lastRunnerResult = null;
 let els = {};
 let currentUser = null;
 let syncTimer = null;
 let isApplyingRemote = false;
+let isCheckingAnswer = false;
+let pythonRunnerWorker = null;
+let pythonRunnerRequestId = 0;
 let runtimeConfig = { githubOAuth: false, githubRepoWrite: false };
+let reviewSolutions = [];
+let selectedReviewSolutionId = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
@@ -3587,6 +3632,7 @@ function cacheElements() {
     "lessonTerms",
     "challengeHost",
     "hintButton",
+    "reportLessonButton",
     "resetButton",
     "prevButton",
     "checkButton",
@@ -3634,6 +3680,10 @@ function cacheElements() {
     "githubAuthHint",
     "authStatus",
     "leaderboardList",
+    "reviewSolutionList",
+    "reviewDetail",
+    "reviewRefreshButton",
+    "reviewStatus",
     "packExportButton",
     "packImportButton",
     "packImportInput",
@@ -3646,6 +3696,7 @@ function cacheElements() {
     "releaseLink",
     "updateStatus",
     "guideButton",
+    "reportAppButton",
     "guideModal",
     "guideCloseButton",
     "guideStartButton",
@@ -3671,6 +3722,8 @@ function bindEvents() {
 
   els.challengeHost.addEventListener("click", handleChallengeClick);
   els.hintButton.addEventListener("click", showHint);
+  els.reportLessonButton?.addEventListener("click", () => openIssueReport({ lesson: getCurrentLesson(), topic: getCurrentTopic() }));
+  els.reportAppButton?.addEventListener("click", () => openIssueReport({}));
   els.resetButton.addEventListener("click", renderLesson);
   els.prevButton?.addEventListener("click", previousLesson);
   els.checkButton.addEventListener("click", checkAnswer);
@@ -3710,6 +3763,9 @@ function bindEvents() {
   els.githubProgressPushButton?.addEventListener("click", pushProgressToGithubDirect);
   els.githubProgressPullButton?.addEventListener("click", pullProgressFromGithubDirect);
   els.githubDisconnectButton?.addEventListener("click", disconnectGithub);
+  els.reviewRefreshButton?.addEventListener("click", fetchReviewSolutions);
+  els.reviewSolutionList?.addEventListener("click", handleReviewListClick);
+  els.reviewDetail?.addEventListener("click", handleReviewDetailClick);
   els.checkUpdatesButton?.addEventListener("click", checkForUpdates);
   els.theoryGrid?.addEventListener("click", handleTheoryClick);
   els.packExportButton?.addEventListener("click", exportLessonPackSnapshot);
@@ -3730,6 +3786,7 @@ function renderAll() {
   renderLesson();
   renderSidebar();
   renderPracticeSets();
+  renderReviewSolutions();
   renderLibrary();
   renderStats();
   setScreen(currentScreen, false);
@@ -3758,6 +3815,7 @@ function setScreen(screen, persist = true) {
     state.currentScreen = screen;
     saveState();
   }
+  if (screen === "review") fetchReviewSolutions({ silent: reviewSolutions.length > 0 });
 }
 
 function renderTopics(filter = "all") {
@@ -3858,13 +3916,7 @@ function renderLesson() {
 
 function renderLessonBrief(lesson) {
   if (!els.lessonBrief) return;
-  const brief = buildLessonBrief(lesson);
-  const rows = [
-    ["Дано", brief.input],
-    ["Нужно", brief.output],
-    ["Пример", brief.example],
-    ["Проверка", brief.check],
-  ].filter(([, value]) => value);
+  const rows = buildLessonBriefRows(lesson);
 
   if (!rows.length) {
     els.lessonBrief.hidden = true;
@@ -3875,7 +3927,7 @@ function renderLessonBrief(lesson) {
   els.lessonBrief.hidden = false;
   els.lessonBrief.innerHTML = rows
     .map(
-      ([label, value]) => `
+      ({ label, value }) => `
         <div class="brief-row">
           <span>${label}</span>
           <p>${formatBriefValue(value)}</p>
@@ -3885,57 +3937,157 @@ function renderLessonBrief(lesson) {
     .join("");
 }
 
-function buildLessonBrief(lesson) {
-  return {
-    input: lesson.input || inferLessonInput(lesson),
-    output: lesson.output || inferLessonOutput(lesson),
-    example: lesson.example || inferLessonExample(lesson),
-    check: lesson.check || lesson.testsText || inferLessonCheck(lesson),
-  };
+function buildLessonBriefRows(lesson) {
+  if (isCodeBriefLesson(lesson)) {
+    return [
+      { label: "Вход", value: lesson.input || inferLessonInput(lesson) },
+      { label: "Выход", value: lesson.output || inferLessonOutput(lesson) },
+      { label: "Пример", value: lesson.examples || lesson.example || inferLessonExample(lesson) },
+      { label: canRunPythonLessonTests(lesson) ? "Скрытые тесты" : "Проверка", value: lesson.hidden || lesson.check || lesson.testsText || inferLessonCheck(lesson) },
+    ].filter((row) => row.value);
+  }
+
+  return [
+    { label: "Контекст", value: lesson.input },
+    { label: "Цель", value: lesson.output },
+    { label: "Пример", value: lesson.examples || lesson.example || inferLessonExample(lesson) },
+    { label: "Проверка", value: lesson.hidden || lesson.check },
+  ].filter((row) => row.value);
+}
+
+function isCodeBriefLesson(lesson) {
+  if (lesson.kind === "write") return true;
+  if (lesson.kind !== "fix") return false;
+  return Boolean(lesson.input || lesson.output || lesson.example || lesson.examples || lesson.check || lesson.hidden || lesson.testsText || canRunPythonLessonTests(lesson));
 }
 
 function inferLessonInput(lesson) {
-  if (lesson.kind === "order") return "Перемешанные строки кода из банка блоков.";
-  if (lesson.kind === "fill") return "Фрагмент кода с пропуском `____`.";
-  if (lesson.kind === "choice") return "Вопрос и несколько вариантов ответа.";
-  if (lesson.kind === "bug") return "Нумерованный фрагмент кода.";
-  if (lesson.kind === "fix") return "Код в редакторе, где уже есть ошибка.";
-  if (lesson.kind === "write") return lesson.starter ? `Функция: \`${lesson.starter}\`` : "Сигнатура функции и короткий контракт.";
-  if (lesson.kind === "idea") return "Контестная ситуация без единственного синтаксического ответа.";
+  const promptInput = inferInputFromPrompt(lesson);
+  if (promptInput) return promptInput;
+  if (lesson.kind === "fix") return "Код в редакторе и контракт из условия.";
+  if (lesson.kind === "write") {
+    const signature = extractFunctionSignature(lesson);
+    return signature ? `Аргументы функции \`${signature}\`.` : "Аргументы и структуры данных описаны в условии.";
+  }
   return "";
 }
 
 function inferLessonOutput(lesson) {
-  if (lesson.kind === "order") return "Рабочий порядок строк сверху вниз.";
-  if (lesson.kind === "fill") return "Выражение или значение, которое надо поставить вместо `____`.";
-  if (lesson.kind === "choice") return "Один лучший вариант.";
-  if (lesson.kind === "bug") return "Номер строки, где находится главная ошибка.";
+  const promptOutput = inferOutputFromPrompt(lesson);
+  if (promptOutput) return promptOutput;
   if (lesson.kind === "fix") return "Исправленная версия кода.";
-  if (lesson.kind === "write") return "Полная реализация функции на Python.";
-  if (lesson.kind === "idea") return "Короткий план решения с ключевыми проверками.";
+  if (lesson.kind === "write") return "Полная реализация на Python с тем же именем функции.";
   return "";
 }
 
 function inferLessonExample(lesson) {
-  if (lesson.kind === "choice" && lesson.options?.length) return `Выбери один вариант из ${lesson.options.length}.`;
-  if (lesson.kind === "order" && lesson.answer?.length) return `Итог должен состоять из ${lesson.answer.length} строк.`;
-  if (lesson.kind === "fill" && lesson.blanks?.length) return lesson.blanks.length === 1 ? "Впиши один фрагмент вместо `____`." : `Заполни ${lesson.blanks.length} пропуска.`;
-  if (lesson.kind === "fix") return "Измени только строки, которые ломают контракт.";
-  if (lesson.kind === "write") return "Сохрани сигнатуру функции из starter.";
-  if (lesson.kind === "bug") return "Нумерация строк начинается с 1 на экране.";
+  if (lesson.sampleInput || lesson.sampleOutput) {
+    return [
+      lesson.sampleInput ? `input: ${lesson.sampleInput}` : "",
+      lesson.sampleOutput ? `output: ${lesson.sampleOutput}` : "",
+    ].filter(Boolean);
+  }
+  const promptExample = inferExampleFromPrompt(lesson);
+  if (promptExample) return promptExample;
+  const testExample = inferExampleFromPyTests(lesson);
+  if (testExample) return testExample;
   return "";
 }
 
 function inferLessonCheck(lesson) {
-  if (lesson.kind === "choice") return "Ответ должен совпасть с контрактом задачи, а не просто звучать знакомо.";
-  if (lesson.kind === "order") return "Код должен выполняться в этом порядке без скрытых перестановок.";
-  if (lesson.kind === "bug") return "Выбери строку с причиной бага, а не строку, где ошибка проявится позже.";
+  if (canRunPythonLessonTests(lesson)) return "Нужен GitHub-вход. Код запускается на скрытых behavioral cases; стиль решения не важен.";
+  if (lesson.kind === "write" || lesson.kind === "fix") return "Сверяется поведение из условия; если runner недоступен, используется нормализованная сверка с эталоном.";
   return "";
+}
+
+function extractFunctionSignature(lesson) {
+  const source = [lesson.starter, lesson.answer, lesson.prompt].filter(Boolean).join("\n");
+  const defMatch = source.match(/def\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/);
+  if (defMatch) return `${defMatch[1]}(${defMatch[2].trim()})`;
+  const inlineMatch = source.match(/`([A-Za-z_]\w*\([^`)]*\))`/);
+  return inlineMatch ? inlineMatch[1] : "";
+}
+
+function inferInputFromPrompt(lesson) {
+  const text = lesson.prompt || "";
+  const lower = text.toLowerCase();
+  const signature = extractFunctionSignature(lesson);
+
+  if (lower.includes("mask_to_bbox")) return "mask: 2D numpy array или tensor. 0 означает фон, ненулевые пиксели считаются объектом.";
+  if (lower.includes("bbox") && lower.includes("coco")) return "bbox в формате `[x1, y1, x2, y2]` с координатами в пикселях.";
+  if (lower.includes("rle_encode")) return "mask: 2D numpy array HxW со значениями 0/1.";
+  if (lower.includes("rle_decode")) return "rle: строка Kaggle RLE; shape: итоговый размер маски `(H, W)`.";
+  if (lower.includes("iou") && lower.includes("mask")) return "pred и target: бинарные маски одинакового размера.";
+  if (lower.includes("box_iou")) return "a и b: bbox `[x1, y1, x2, y2]` в exclusive-формате.";
+  if (lower.includes("dice")) return "pred/prob/logits и target: маски одинаковой формы.";
+  if (lower.includes("threshold")) return "probabilities/scores и true labels на validation.";
+  if (lower.includes("train") || lower.includes("validation")) return "model, batch/loader и служебные объекты из условия: optimizer, criterion, device.";
+  if (signature) return `Аргументы функции \`${signature}\` в формате из условия.`;
+  return "";
+}
+
+function inferOutputFromPrompt(lesson) {
+  const text = lesson.prompt || "";
+  const lower = text.toLowerCase();
+  const returnMatch = text.match(/(?:возвращает|верни|вернуть)\s+([^.;]+)(?:[.;]|$)/i);
+  if (returnMatch) return returnMatch[1].trim();
+
+  if (lower.includes("mask_to_bbox")) return "`[x1, y1, x2, y2]` или `None`, если foreground-пикселей нет.";
+  if (lower.includes("rle_encode")) return "Kaggle RLE строка в column-major/Fortran порядке.";
+  if (lower.includes("rle_decode")) return "2D numpy mask HxW со значениями 0/1.";
+  if (lower.includes("iou")) return "float score от 0 до 1.";
+  if (lower.includes("dice")) return "scalar Dice/Dice loss в формате из условия.";
+  if (lesson.kind === "fix") return "Код с тем же смыслом, но без указанной ошибки.";
+  if (lesson.kind === "write") return "Результат ровно в формате, описанном в условии.";
+  return "";
+}
+
+function inferExampleFromPrompt(lesson) {
+  const lower = (lesson.prompt || "").toLowerCase();
+  if (lower.includes("mask_to_bbox")) {
+    return [
+      "mask = [[0,0,0], [0,1,1], [0,1,0]]",
+      "mask_to_bbox(mask) -> [1, 1, 2, 2]",
+      "mask = zeros((2, 3)) -> None",
+    ];
+  }
+  if (lower.includes("box_iou")) {
+    return ["a = [0,0,2,2], b = [1,1,3,3]", "box_iou(a, b) -> 1 / 7"];
+  }
+  if (lower.includes("rle_encode")) {
+    return ["mask с foreground в двух соседних пикселях одного столбца", "rle_encode(mask) -> строка start length в Kaggle-формате"];
+  }
+  if (lower.includes("rle_decode")) {
+    return ["rle = '2 3', shape = (2, 3)", "rle_decode(rle, shape) -> mask HxW с восстановленным foreground"];
+  }
+  return "";
+}
+
+function inferExampleFromPyTests(lesson) {
+  const tests = lesson.pyTests?.code || "";
+  if (!tests) return "";
+  const signature = extractFunctionSignature(lesson);
+  const name = signature.match(/^([A-Za-z_]\w*)\(/)?.[1];
+  if (!name) return "";
+
+  const examples = [];
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const equalityRe = new RegExp(`assert\\s+${escapedName}\\(([^\\n]+?)\\)\\s*==\\s*([^\\n]+)`, "g");
+  for (const match of tests.matchAll(equalityRe)) {
+    examples.push(`${name}(${match[1].trim()}) -> ${match[2].trim()}`);
+    if (examples.length >= 2) break;
+  }
+  const noneRe = new RegExp(`assert\\s+${escapedName}\\(([^\\n]+?)\\)\\s+is\\s+None`, "g");
+  for (const match of tests.matchAll(noneRe)) {
+    examples.push(`${name}(${match[1].trim()}) -> None`);
+    if (examples.length >= 2) break;
+  }
+  return examples.length ? examples : "";
 }
 
 function formatBriefValue(value) {
   if (Array.isArray(value)) {
-    return value.map((item) => `<code>${escapeHtml(String(item))}</code>`).join(" ");
+    return value.map((item) => `<code>${escapeHtml(String(item))}</code>`).join("<br>");
   }
   const escaped = escapeHtml(String(value));
   return escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -4020,7 +4172,7 @@ function renderCodeWrite(lesson, placeholder) {
     <div class="write-panel">
       <div class="answer-label">${placeholder}</div>
       <textarea class="code-textarea" id="codeAnswer" autocomplete="off" autocapitalize="off" spellcheck="false">${escapeHtml(starter)}</textarea>
-      ${lesson.testsText ? `<p class="tests-text">${escapeHtml(lesson.testsText)}</p>` : ""}
+      ${lesson.pyTests ? `<p class="tests-text">Hidden tests запускаются через Python runner.</p>` : ""}
     </div>
   `;
   document.getElementById("codeAnswer")?.addEventListener("keydown", handleCodeTextareaKeydown);
@@ -4295,6 +4447,12 @@ function buildBugMismatchHint(lesson) {
 }
 
 function buildCodeMismatchHint(lesson) {
+  if (lastRunnerResult?.available && canRunPythonLessonTests(lesson)) {
+    return `Python-тесты не прошли:\n${lastRunnerResult.error || "проверь контракт задачи и edge cases."}`;
+  }
+  if (lastRunnerResult && !lastRunnerResult.available && canRunPythonLessonTests(lesson)) {
+    return `Локальный Python runner недоступен: ${lastRunnerResult.error}\nСейчас работает запасная сверка с эталонным кодом. Для настоящей offline-проверки положи Pyodide в \`vendor/pyodide\`.`;
+  }
   const answer = chooseClosestTextAnswer(lesson);
   const answerLines = splitUsefulLines(answer);
   const userLines = splitUsefulLines(typedCode);
@@ -4495,32 +4653,31 @@ function getLessonTerms(lesson) {
   return glossary.filter((term) => explicit.has(term.key) || term.aliases.some((alias) => text.includes(alias.toLowerCase())));
 }
 
-function checkAnswer() {
+async function checkAnswer() {
+  if (isCheckingAnswer) return;
   const lesson = getCurrentLesson();
   let ok = false;
-  if (lesson.kind === "order") ok = acceptedAnswers(lesson).some((answer) => arraysEqual(selectedBlocks, answer));
-  if (lesson.kind === "choice") ok = acceptedAnswers(lesson).includes(selectedOption);
-  if (lesson.kind === "fill") {
-    ok = lesson.blanks.every((answer, index) => {
-      const input = document.querySelector(`[data-blank-index="${index}"]`);
-      return normalizeCode(input?.value || "") === normalizeCode(answer);
-    });
-  }
-  if (lesson.kind === "bug") ok = selectedBugLine === lesson.answer;
-  if (lesson.kind === "fix" || lesson.kind === "write") {
-    const input = document.getElementById("codeAnswer");
-    typedCode = input?.value || "";
-    ok = acceptedAnswers(lesson).some((answer) =>
-      lesson.strictLines
-        ? normalizeWrittenCode(typedCode) === normalizeWrittenCode(answer)
-        : normalizeCode(typedCode) === normalizeCode(answer),
-    );
-  }
-  if (lesson.kind === "idea") {
-    const input = document.getElementById("ideaAnswer");
-    typedCode = input?.value || "";
-    lastIdeaEvaluation = evaluateIdeaAnswer(lesson, typedCode);
-    ok = lastIdeaEvaluation.ok;
+  lastRunnerResult = null;
+
+  try {
+    if (canRunPythonLessonTests(lesson)) {
+      if (!currentUser) {
+        openAuthModal();
+        showAuthStatus("Для задач с запуском кода нужен GitHub-вход. Так мы сможем ограничивать очередь runner-а и сохранять решения.");
+        showFeedback("Нужен вход", "Кодовые задачи с hidden tests принимаются только после регистрации через GitHub.", false);
+        return;
+      }
+      setCheckingUi(true);
+      const input = document.getElementById("codeAnswer");
+      typedCode = input?.value || "";
+      showFeedback("Проверяю", "Запускаю локальные Python-тесты в браузере. Первый запуск может занять несколько секунд.", null);
+      lastRunnerResult = await runPythonLessonTests(lesson, typedCode);
+      ok = lastRunnerResult.available ? lastRunnerResult.ok : checkDeterministicAnswer(lesson);
+    } else {
+      ok = checkDeterministicAnswer(lesson);
+    }
+  } finally {
+    setCheckingUi(false);
   }
 
   if (ok) {
@@ -4530,7 +4687,13 @@ function checkAnswer() {
     if (firstPass) state.xp += 12;
     updateStreak();
     saveState();
-    showFeedback("Верно", lesson.kind === "idea" ? `${lesson.explain}\n\n${lesson.reference || ""}` : lesson.explain, true);
+    const checkedByRunner = lastRunnerResult?.available && canRunPythonLessonTests(lesson);
+    const successText = checkedByRunner
+      ? `Python-тесты прошли.\n\n${lesson.explain}`
+      : lesson.kind === "idea"
+        ? `${lesson.explain}\n\n${lesson.reference || ""}`
+        : lesson.explain;
+    showFeedback("Верно", successText, true);
     sendEvent(lesson.id, true, firstPass ? 12 : 0);
     syncSolutionIfEnabled(lesson, firstPass);
     renderStats();
@@ -4545,6 +4708,147 @@ function checkAnswer() {
     renderStats();
     renderSidebar();
   }
+}
+
+function checkDeterministicAnswer(lesson) {
+  if (lesson.kind === "order") return acceptedAnswers(lesson).some((answer) => arraysEqual(selectedBlocks, answer));
+  if (lesson.kind === "choice") return acceptedAnswers(lesson).includes(selectedOption);
+  if (lesson.kind === "fill") {
+    return lesson.blanks.every((answer, index) => {
+      const input = document.querySelector(`[data-blank-index="${index}"]`);
+      return normalizeCode(input?.value || "") === normalizeCode(answer);
+    });
+  }
+  if (lesson.kind === "bug") return selectedBugLine === lesson.answer;
+  if (lesson.kind === "fix" || lesson.kind === "write") {
+    const input = document.getElementById("codeAnswer");
+    typedCode = input?.value || "";
+    return acceptedAnswers(lesson).some((answer) =>
+      lesson.strictLines
+        ? normalizeWrittenCode(typedCode) === normalizeWrittenCode(answer)
+        : normalizeCode(typedCode) === normalizeCode(answer),
+    );
+  }
+  if (lesson.kind === "idea") {
+    const input = document.getElementById("ideaAnswer");
+    typedCode = input?.value || "";
+    lastIdeaEvaluation = evaluateIdeaAnswer(lesson, typedCode);
+    return lastIdeaEvaluation.ok;
+  }
+  return false;
+}
+
+function canRunPythonLessonTests(lesson) {
+  return Boolean(lesson.pyTests?.code && (lesson.kind === "write" || lesson.kind === "fix"));
+}
+
+function setCheckingUi(checking) {
+  isCheckingAnswer = checking;
+  if (!els.checkButton) return;
+  els.checkButton.disabled = checking;
+  els.checkButton.textContent = checking ? "Проверяю..." : "Проверить";
+}
+
+function getPyodideSources() {
+  const localScriptUrl = new URL(PYODIDE_LOCAL_SCRIPT, window.location.href).href;
+  const localIndexUrl = new URL("./vendor/pyodide/", window.location.href).href;
+  const sources = [{ scriptUrl: localScriptUrl, indexUrl: localIndexUrl }];
+  if (navigator.onLine) {
+    sources.push({
+      scriptUrl: PYODIDE_CDN_SCRIPT,
+      indexUrl: PYODIDE_CDN_SCRIPT.replace(/pyodide\.js$/, ""),
+    });
+  }
+  return sources;
+}
+
+function getPythonRunnerWorker() {
+  if (pythonRunnerWorker) return pythonRunnerWorker;
+  pythonRunnerWorker = new Worker(new URL("./python-runner-worker.js", window.location.href), { name: "mlingo-python-runner" });
+  return pythonRunnerWorker;
+}
+
+function resetPythonRunnerWorker() {
+  if (!pythonRunnerWorker) return;
+  pythonRunnerWorker.terminate();
+  pythonRunnerWorker = null;
+}
+
+function runPythonLessonTests(lesson, code) {
+  if (!window.Worker) {
+    return Promise.resolve({
+      available: false,
+      ok: false,
+      error: "Web Worker недоступен в этом браузере.",
+    });
+  }
+
+  const requestId = (pythonRunnerRequestId += 1);
+  const timeoutMs = lesson.pyTests.timeoutMs || PYTHON_RUNNER_TIMEOUT_MS;
+  const worker = getPythonRunnerWorker();
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+    };
+
+    const finish = (result) => {
+      cleanup();
+      resolve(result);
+    };
+
+    const onMessage = (event) => {
+      const message = event.data || {};
+      if (message.id !== requestId) return;
+      if (message.ok) {
+        finish({
+          available: true,
+          ok: true,
+          stdout: message.stdout || "",
+        });
+        return;
+      }
+
+      if (message.phase === "loading") resetPythonRunnerWorker();
+      finish({
+        available: message.phase !== "loading",
+        ok: false,
+        phase: message.phase,
+        error: message.error || "Python-тесты завершились с ошибкой.",
+      });
+    };
+
+    const onError = (event) => {
+      finish({
+        available: false,
+        ok: false,
+        error: event.message || "Не удалось запустить Python runner.",
+      });
+    };
+
+    const timer = window.setTimeout(() => {
+      resetPythonRunnerWorker();
+      finish({
+        available: true,
+        ok: false,
+        phase: "timeout",
+        error: `Python-тесты не завершились за ${Math.round(timeoutMs / 1000)} сек. Проверь бесконечные циклы или слишком тяжелый код.`,
+      });
+    }, timeoutMs);
+
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    worker.postMessage({
+      id: requestId,
+      code,
+      setup: lesson.pyTests.setup || "",
+      tests: lesson.pyTests.code,
+      packages: lesson.pyTests.packages || [],
+      sources: getPyodideSources(),
+    });
+  });
 }
 
 function nextLesson() {
@@ -4632,6 +4936,165 @@ function renderPracticeSets() {
   els.bossGrid.innerHTML = practiceSets
     .map((set) => `<div class="boss-card"><strong>${set.title}</strong><small>${set.copy}</small></div>`)
     .join("");
+}
+
+function openIssueReport({ lesson = null, topic = null } = {}) {
+  const title = lesson ? `Ошибка в уроке: ${lesson.title}` : "Ошибка или предложение по MLingo";
+  const body = [
+    "## Что не так?",
+    "",
+    "<опиши проблему коротко>",
+    "",
+    "## Где заметил",
+    lesson ? `- Урок: ${lesson.title}` : "- Раздел: общий интерфейс / контент / сборка",
+    lesson ? `- lessonId: ${lesson.id}` : "",
+    topic ? `- Тема: ${topic.title}` : "",
+    `- URL: ${window.location.href}`,
+    "",
+    "## Что ожидалось",
+    "",
+    "<как должно работать или звучать>",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+  const url = `${PROJECT_ISSUES_URL}?${new URLSearchParams({
+    title,
+    body,
+    labels: "content-feedback",
+  }).toString()}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function renderReviewSolutions() {
+  if (!els.reviewSolutionList) return;
+  if (!reviewSolutions.length) {
+    els.reviewSolutionList.innerHTML = `<div class="empty-state">Пока нет публичных решений. Они появятся после GitHub sync.</div>`;
+    if (els.reviewDetail) els.reviewDetail.innerHTML = `<div class="empty-state">Включи sync в профиле и реши write/fix/idea задачу.</div>`;
+    return;
+  }
+  els.reviewSolutionList.innerHTML = reviewSolutions
+    .map(
+      (solution) => `
+        <button class="review-row${solution.id === selectedReviewSolutionId ? " is-active" : ""}" data-review-id="${solution.id}" type="button">
+          <span>
+            <strong>${escapeHtml(solution.lessonTitle)}</strong>
+            <small>${escapeHtml(solution.topicTitle || "MLingo")} · @${escapeHtml(solution.author || "user")}</small>
+          </span>
+          <em>${solution.commentCount || 0}</em>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function handleReviewListClick(event) {
+  const button = event.target.closest("[data-review-id]");
+  if (!button) return;
+  selectedReviewSolutionId = Number(button.dataset.reviewId);
+  renderReviewSolutions();
+  fetchReviewSolutionDetail(selectedReviewSolutionId);
+}
+
+async function fetchReviewSolutions({ silent = false } = {}) {
+  if (!silent) showReviewStatus("Загружаю разборы...", true);
+  try {
+    const data = await apiRequest("/api/review/solutions", { skipAuth: true });
+    reviewSolutions = data.solutions || [];
+    if (!selectedReviewSolutionId && reviewSolutions[0]) selectedReviewSolutionId = reviewSolutions[0].id;
+    renderReviewSolutions();
+    if (selectedReviewSolutionId) await fetchReviewSolutionDetail(selectedReviewSolutionId, { silent: true });
+    showReviewStatus(reviewSolutions.length ? "" : "Пока нет решений для разбора.", true);
+  } catch (error) {
+    renderReviewSolutions();
+    showReviewStatus(`Разборы недоступны: ${error.message}`, false);
+  }
+}
+
+async function fetchReviewSolutionDetail(solutionId, { silent = false } = {}) {
+  if (!els.reviewDetail || !solutionId) return;
+  if (!silent) els.reviewDetail.innerHTML = `<div class="empty-state">Открываю решение...</div>`;
+  try {
+    const data = await apiRequest(`/api/review/solutions/${solutionId}`, { skipAuth: true });
+    renderReviewDetail(data.solution, data.comments || []);
+  } catch (error) {
+    els.reviewDetail.innerHTML = `<div class="empty-state">Не удалось открыть решение: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderReviewDetail(solution, comments) {
+  if (!els.reviewDetail || !solution) return;
+  const language = solution.kind === "idea" ? "markdown" : "python";
+  els.reviewDetail.innerHTML = `
+    <div class="review-detail-head">
+      <div>
+        <span class="eyebrow">${escapeHtml(solution.kind)} · ${escapeHtml(solution.topicTitle || "MLingo")}</span>
+        <h3>${escapeHtml(solution.lessonTitle)}</h3>
+        <small>@${escapeHtml(solution.author || "user")} · ${formatTimestamp(solution.createdAt)}</small>
+      </div>
+      ${solution.githubUrl ? `<a class="ghost-button link-button" href="${escapeHtml(solution.githubUrl)}" target="_blank" rel="noreferrer">GitHub</a>` : ""}
+    </div>
+    <pre class="code-panel review-code"><code class="language-${language}">${escapeHtml(solution.answer || "")}</code></pre>
+    <div class="review-comments">
+      <strong>Комментарии</strong>
+      ${
+        comments.length
+          ? comments
+              .map(
+                (comment) => `
+                  <div class="review-comment">
+                    <span>@${escapeHtml(comment.author || "user")} · ${formatTimestamp(comment.createdAt)}</span>
+                    <p>${escapeHtml(comment.body)}</p>
+                  </div>
+                `,
+              )
+              .join("")
+          : `<div class="empty-state">Пока нет комментариев. Можно оставить первый разбор.</div>`
+      }
+    </div>
+    <div class="review-comment-form">
+      <textarea id="reviewCommentInput" class="code-textarea" placeholder="Что хорошо, где edge case, как бы ты упростил или проверил решение?"></textarea>
+      <button class="primary-button" data-action="post-review-comment" data-review-id="${solution.id}" type="button">Отправить разбор</button>
+    </div>
+  `;
+}
+
+function handleReviewDetailClick(event) {
+  const button = event.target.closest("[data-action='post-review-comment']");
+  if (!button) return;
+  postReviewComment(Number(button.dataset.reviewId));
+}
+
+async function postReviewComment(solutionId) {
+  if (!currentUser) {
+    openAuthModal();
+    showReviewStatus("Чтобы оставить разбор, войди через GitHub.", false);
+    return;
+  }
+  const input = document.getElementById("reviewCommentInput");
+  const body = (input?.value || "").trim();
+  if (body.length < 8) {
+    showReviewStatus("Комментарий слишком короткий.", false);
+    return;
+  }
+  try {
+    await apiRequest(`/api/review/solutions/${solutionId}/comments`, {
+      method: "POST",
+      body: { body },
+    });
+    if (input) input.value = "";
+    showReviewStatus("Разбор опубликован.", true);
+    await fetchReviewSolutions({ silent: true });
+    await fetchReviewSolutionDetail(solutionId, { silent: true });
+  } catch (error) {
+    showReviewStatus(error.message, false);
+  }
+}
+
+function showReviewStatus(text, good = false) {
+  if (!els.reviewStatus) return;
+  els.reviewStatus.hidden = !text;
+  els.reviewStatus.className = `feedback pack-status ${good ? "is-good" : "is-bad"}`;
+  els.reviewStatus.textContent = text;
 }
 
 function renderLibrary() {
@@ -4863,7 +5326,8 @@ function handleQueueClick(event) {
 
 function showFeedback(label, text, good) {
   els.feedbackBox.hidden = false;
-  els.feedbackBox.className = `feedback ${good ? "is-good" : "is-bad"}`;
+  const stateClass = good === null ? "is-running" : good ? "is-good" : "is-bad";
+  els.feedbackBox.className = `feedback ${stateClass}`;
   els.feedbackBox.innerHTML = `<strong>${escapeHtml(label)}.</strong>${formatFeedbackText(text)}`;
 }
 
@@ -5635,15 +6099,15 @@ async function loadLessonPacks() {
   for (const url of DEFAULT_PACK_URLS) {
     try {
       const response = await fetch(url, { cache: "no-cache" });
-      if (response.ok) mergeLessonPack(await response.json());
+      if (response.ok) mergeLessonPack(await response.json(), { trustedRunner: true });
     } catch {
       // Built-in app.js lessons are enough if pack loading fails.
     }
   }
-  loadStoredLessonPacks().forEach((pack) => mergeLessonPack(pack));
+  loadStoredLessonPacks().forEach((pack) => mergeLessonPack(pack, { trustedRunner: false }));
 }
 
-function mergeLessonPack(pack) {
+function mergeLessonPack(pack, { trustedRunner = false } = {}) {
   if (!pack?.topics?.length) return { added: 0, skipped: 0 };
   let added = 0;
   let skipped = 0;
@@ -5674,12 +6138,18 @@ function mergeLessonPack(pack) {
         skipped += 1;
         continue;
       }
-      topic.lessons.push(lesson);
+      topic.lessons.push(trustedRunner ? lesson : withoutRunnerCode(lesson));
       existing.add(lesson.id);
       added += 1;
     }
   }
   return { added, skipped };
+}
+
+function withoutRunnerCode(lesson) {
+  if (!lesson?.pyTests) return lesson;
+  const { pyTests, ...safeLesson } = lesson;
+  return safeLesson;
 }
 
 function loadStoredLessonPacks() {
@@ -5911,6 +6381,17 @@ function formatFeedbackText(text) {
     .split("\n\n")
     .map((chunk) => `<p>${escapeHtml(chunk).replaceAll("\n", "<br>")}</p>`)
     .join("");
+}
+
+function formatTimestamp(value) {
+  const timestamp = Number(value || 0);
+  if (!timestamp) return "только что";
+  return new Date(timestamp * 1000).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function escapeHtml(value) {

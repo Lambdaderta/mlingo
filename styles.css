@@ -228,6 +228,19 @@ textarea:focus-visible {
   padding: 1rem clamp(1rem, 2vw, 1.5rem) 2rem;
 }
 
+body[data-screen="lesson"] .workspace {
+  width: min(100%, 104rem);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-screen="lesson"] .skill-rail {
+  display: none;
+}
+
+body[data-screen="lesson"] .screen-stack {
+  grid-column: 1;
+}
+
 .skill-rail,
 .lesson-card,
 .side-card,
@@ -264,6 +277,11 @@ textarea:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.lesson-meta > div,
+.module-copy {
+  min-width: 0;
 }
 
 .profile-mini {
@@ -311,6 +329,14 @@ textarea:focus-visible {
 .rail-header {
   align-items: center;
   margin-top: 0.2rem;
+  flex-wrap: wrap;
+}
+
+.rail-header strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .track-filter {
@@ -360,6 +386,7 @@ textarea:focus-visible {
 .module-copy strong {
   font-size: 0.95rem;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .module-copy small,
@@ -405,6 +432,7 @@ textarea:focus-visible {
   margin: 0.2rem 0 0;
   line-height: 1.08;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .mission-strip h1 {
@@ -436,7 +464,7 @@ textarea:focus-visible {
 
 .brief-row {
   display: grid;
-  grid-template-columns: 5rem minmax(0, 1fr);
+  grid-template-columns: minmax(6.5rem, 0.18fr) minmax(0, 1fr);
   gap: 0.75rem;
   align-items: start;
 }
@@ -446,6 +474,7 @@ textarea:focus-visible {
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.04em;
+  line-height: 1.15;
   text-transform: uppercase;
 }
 
@@ -453,6 +482,7 @@ textarea:focus-visible {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .brief-row code {
@@ -831,6 +861,11 @@ textarea:focus-visible {
 .feedback.is-bad {
   border: 1px solid rgba(215, 138, 125, 0.35);
   background: rgba(105, 57, 49, 0.27);
+}
+
+.feedback.is-running {
+  border: 1px solid rgba(142, 164, 199, 0.34);
+  background: rgba(72, 87, 116, 0.22);
 }
 
 .review-panel {
@@ -1688,6 +1723,101 @@ textarea:focus-visible {
   font-family: var(--mono);
 }
 
+.review-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.review-list,
+.review-detail,
+.review-comments,
+.review-comment-form {
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.review-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control);
+  color: var(--ink);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.review-row.is-active,
+.review-row:hover {
+  border-color: rgba(199, 167, 106, 0.48);
+  background: var(--control-hover);
+}
+
+.review-row strong,
+.review-row small,
+.review-detail-head small {
+  display: block;
+}
+
+.review-row small,
+.review-detail-head small,
+.review-comment span {
+  color: var(--muted);
+}
+
+.review-row em {
+  min-width: 2rem;
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--blue-strong);
+  font-style: normal;
+  font-weight: 900;
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+}
+
+.review-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.review-code {
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.review-comment {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  padding: 0.75rem;
+}
+
+.review-comment p {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+}
+
+.empty-state {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  padding: 1rem;
+}
+
 .progress-bar {
   height: 0.7rem;
   overflow: hidden;
@@ -2126,6 +2256,7 @@ body.focus-mode .screen-stack {
   .stat-grid,
   .profile-grid,
   .repo-grid,
+  .review-layout,
   .boss-grid,
   .library-grid,
   .theory-grid,
@@ -2192,7 +2323,7 @@ body.focus-mode .screen-stack {
     left: 0.75rem;
     z-index: 60;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 0.4rem;
     border: 1px solid var(--line);
     border-radius: 12px;
